@@ -4,22 +4,23 @@ object YouTubeHelper {
     /**
      * Extrai o ID de um vídeo do YouTube a partir de qualquer formato de link:
      * - https://www.youtube.com/watch?v=dQw4w9WgXcQ
-     * - https://youtu.be/dQw4w9WgXcQ
+     * - https://youtu.be/dQw4w9WgXcQ?si=abc
      * - https://www.youtube.com/shorts/dQw4w9WgXcQ
      * - https://www.youtube.com/embed/dQw4w9WgXcQ
      * - https://m.youtube.com/watch?v=dQw4w9WgXcQ
+     * - https://youtube.com/v/dQw4w9WgXcQ
      */
     fun extractVideoId(url: String?): String? {
         if (url.isNullOrBlank()) return null
         val trimmed = url.trim()
 
-        // Se já for apenas o ID de 11 caracteres
+        // Se já for apenas o ID de 11 caracteres alfanuméricos
         if (trimmed.length == 11 && trimmed.matches(Regex("^[a-zA-Z0-9_-]{11}$"))) {
             return trimmed
         }
 
         val patterns = listOf(
-            Regex("(?:youtube\\.com/watch\\?v=|youtube\\.com/watch\\?.*&v=)([a-zA-Z0-9_-]{11})"),
+            Regex("(?:youtube\\.com/watch\\?v=|youtube\\.com/watch\\?.*[&?]v=)([a-zA-Z0-9_-]{11})"),
             Regex("youtu\\.be/([a-zA-Z0-9_-]{11})"),
             Regex("youtube\\.com/embed/([a-zA-Z0-9_-]{11})"),
             Regex("youtube\\.com/shorts/([a-zA-Z0-9_-]{11})"),
@@ -41,8 +42,15 @@ object YouTubeHelper {
     }
 
     /**
-     * Gera HTML completo e compatível para exibição e renderização fluida no WebView,
-     * evitando o problema comum de tela preta com reprodução apenas de áudio.
+     * Retorna a URL da thumbnail em alta definição do vídeo do YouTube.
+     */
+    fun getThumbnailUrl(videoId: String): String {
+        return "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+    }
+
+    /**
+     * Gera HTML completo e compatível com a YouTube IFrame API e aceleração por hardware,
+     * garantindo que a superfície de vídeo seja renderizada sem tela preta.
      */
     fun buildEmbedHtml(videoId: String): String {
         return """
@@ -59,51 +67,92 @@ object YouTubeHelper {
                         background: #000000;
                     }
                     html, body {
-                        width: 100%;
-                        height: 100%;
+                        width: 100vw;
+                        height: 100vh;
                         overflow: hidden;
                         background-color: #000000;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
                     }
-                    .player-container {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
+                    .video-wrapper {
+                        position: relative;
                         width: 100%;
                         height: 100%;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        background: #000000;
+                        background-color: #000000;
                     }
-                    iframe {
+                    #player {
                         width: 100%;
                         height: 100%;
+                        position: absolute;
+                        top: 0;
+                        left: 0;
                         border: 0;
                     }
                 </style>
             </head>
             <body>
-                <div class="player-container">
-                    <iframe
-                        id="ytplayer"
-                        type="text/html"
-                        src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&controls=1&enablejsapi=1&rel=0&modestbranding=1&fs=1&origin=https://www.youtube.com"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowfullscreen>
-                    </iframe>
+                <div class="video-wrapper">
+                    <div id="player"></div>
                 </div>
+
                 <script>
-                    // Manter tela ativa e gerenciar playback
-                    var player = document.getElementById('ytplayer');
-                    function playVideo() {
-                        if (player && player.contentWindow) {
-                            player.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-                        }
+                    var tag = document.createElement('script');
+                    tag.src = "https://www.youtube.com/iframe_api";
+                    var firstScriptTag = document.getElementsByTagName('script')[0];
+                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+                    var ytPlayer;
+                    function onYouTubeIframeAPIReady() {
+                        ytPlayer = new YT.Player('player', {
+                            videoId: '$videoId',
+                            playerVars: {
+                                'autoplay': 1,
+                                'playsinline': 1,
+                                'controls': 1,
+                                'rel': 0,
+                                'modestbranding': 1,
+                                'fs': 1,
+                                'loop': 1,
+                                'playlist': '$videoId',
+                                'enablejsapi': 1,
+                                'iv_load_policy': 3,
+                                'origin': 'https://www.youtube.com'
+                            },
+                            events: {
+                                'onReady': onPlayerReady,
+                                'onStateChange': onPlayerStateChange
+                            }
+                        });
                     }
+
+                    function onPlayerReady(event) {
+                        try {
+                            event.target.playVideo();
+                        } catch (e) {}
+                    }
+
+                    function onPlayerStateChange(event) {
+                        // Estado do player atualizado
+                    }
+
+                    function playVideo() {
+                        try {
+                            if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+                                ytPlayer.playVideo();
+                            }
+                        } catch (e) {}
+                    }
+
                     function pauseVideo() {
-                        if (player && player.contentWindow) {
-                            player.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-                        }
+                        try {
+                            if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+                                ytPlayer.pauseVideo();
+                            }
+                        } catch (e) {}
                     }
                 </script>
             </body>

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -24,16 +25,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import com.example.data.model.Drama
 import com.example.data.model.Episode
 import com.example.data.util.VideoUrlResolver
@@ -79,28 +85,44 @@ fun VerticalEpisodePlayer(
 
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
+    // Configuração robusta do ExoPlayer para streams diretos (MP4 / HLS)
     val exoPlayer = remember(videoSource, isYouTube) {
         if (isYouTube) {
             null
         } else {
             try {
-                ExoPlayer.Builder(context).build().apply {
-                    if (!videoSource.isNullOrBlank()) {
-                        val mediaItem = MediaItem.fromUri(Uri.parse(videoSource))
-                        setMediaItem(mediaItem)
-                        repeatMode = Player.REPEAT_MODE_ONE
-                        prepare()
-                        playWhenReady = isPlaying
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build()
+
+                ExoPlayer.Builder(context)
+                    .setAudioAttributes(audioAttributes, true)
+                    .setWakeMode(C.WAKE_MODE_NETWORK)
+                    .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+                    .build()
+                    .apply {
+                        if (!videoSource.isNullOrBlank()) {
+                            val mediaItem = MediaItem.fromUri(Uri.parse(videoSource))
+                            setMediaItem(mediaItem)
+                            repeatMode = Player.REPEAT_MODE_ONE
+                            prepare()
+                            playWhenReady = isPlaying
+                        }
+                        addListener(object : Player.Listener {
+                            override fun onPlaybackStateChanged(state: Int) {
+                                isVideoBuffering = state == Player.STATE_BUFFERING
+                            }
+
+                            override fun onRenderedFirstFrame() {
+                                isVideoBuffering = false
+                            }
+
+                            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                                isVideoBuffering = false
+                            }
+                        })
                     }
-                    addListener(object : Player.Listener {
-                        override fun onPlaybackStateChanged(state: Int) {
-                            isVideoBuffering = state == Player.STATE_BUFFERING
-                        }
-                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                            isVideoBuffering = false
-                        }
-                    })
-                }
             } catch (e: Throwable) {
                 null
             }
@@ -110,6 +132,7 @@ fun VerticalEpisodePlayer(
     DisposableEffect(exoPlayer) {
         onDispose {
             try {
+                exoPlayer?.stop()
                 exoPlayer?.release()
             } catch (_: Throwable) {}
         }
@@ -117,7 +140,6 @@ fun VerticalEpisodePlayer(
 
     LaunchedEffect(isPlaying, isPlayerPaused, isYouTube) {
         if (isYouTube) {
-            isVideoBuffering = false
             try {
                 if (isPlaying && !isPlayerPaused) {
                     webViewRef?.evaluateJavascript("playVideo();", null)
@@ -137,22 +159,47 @@ fun VerticalEpisodePlayer(
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        // Thumbnail de fundo para evitar tela preta durante carregamento da superfície de vídeo
+        val posterImage = remember(youtubeVideoId, drama.coverUrl) {
+            if (youtubeVideoId != null) {
+                YouTubeHelper.getThumbnailUrl(youtubeVideoId)
+            } else {
+                drama.coverUrl
+            }
+        }
+
+        AsyncImage(
+            model = posterImage,
+            contentDescription = drama.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
         if (isYouTube && youtubeVideoId != null) {
-            // Player Integrado de YouTube com Aceleração por Hardware ativa (evita tela preta)
+            // Renderização do YouTube via WebView com Aceleração por Hardware nativa e ChromeClient
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
                         setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.databaseEnabled = true
-                        settings.mediaPlaybackRequiresUserGesture = false
-                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
-                        settings.allowFileAccess = true
-                        settings.allowContentAccess = true
-                        setBackgroundColor(android.graphics.Color.BLACK)
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            mediaPlaybackRequiresUserGesture = false
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            loadWithOverviewMode = true
+                            useWideViewPort = true
+                            allowFileAccess = true
+                            allowContentAccess = true
+                            cacheMode = WebSettings.LOAD_DEFAULT
+                            userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                        }
 
                         webChromeClient = object : WebChromeClient() {
                             override fun getDefaultVideoPoster(): Bitmap? {
@@ -161,6 +208,11 @@ fun VerticalEpisodePlayer(
                         }
 
                         webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                isVideoBuffering = false
+                            }
+
                             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                                 return false
                             }
@@ -177,42 +229,57 @@ fun VerticalEpisodePlayer(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Player de Vídeo ExoPlayer (MP4 / Streams Locais ou Remotos)
+            // Player de Vídeo ExoPlayer (MP4 / HLS) com AspectRatioFrameLayout e Shutter transparente
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         player = exoPlayer
                         useController = false
-                        layoutParams = android.view.ViewGroup.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
                         )
                     }
                 },
                 update = { playerView ->
                     playerView.player = exoPlayer
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                showHeartAnimation = true
-                                if (!isLiked) {
-                                    onToggleLike()
-                                }
-                            },
-                            onTap = {
-                                isPlayerPaused = !isPlayerPaused
-                                exoPlayer?.playWhenReady = !isPlayerPaused
-                            }
-                        )
-                    }
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        // Overlay de Pausa (para ExoPlayer)
-        if (isPlayerPaused && !isYouTube) {
+        // Camada transparente de Gestos (Toque único para pausar/despausar, Toque duplo para curtir)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(isYouTube, youtubeVideoId) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            showHeartAnimation = true
+                            if (!isLiked) {
+                                onToggleLike()
+                            }
+                        },
+                        onTap = {
+                            isPlayerPaused = !isPlayerPaused
+                            if (isYouTube) {
+                                if (isPlayerPaused) {
+                                    webViewRef?.evaluateJavascript("pauseVideo();", null)
+                                } else {
+                                    webViewRef?.evaluateJavascript("playVideo();", null)
+                                }
+                            } else {
+                                exoPlayer?.playWhenReady = !isPlayerPaused
+                            }
+                        }
+                    )
+                }
+        )
+
+        // Overlay de Pausa
+        if (isPlayerPaused) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -236,8 +303,8 @@ fun VerticalEpisodePlayer(
             }
         }
 
-        // Loading do Vídeo
-        if (isVideoBuffering && !isYouTube) {
+        // Indicador de Carregamento (Buffer)
+        if (isVideoBuffering) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -255,7 +322,7 @@ fun VerticalEpisodePlayer(
             onAnimationEnd = { showHeartAnimation = false }
         )
 
-        // Gradiente Inferior
+        // Gradiente Inferior para facilitar a leitura dos textos e controles
         Box(
             modifier = Modifier
                 .fillMaxWidth()
