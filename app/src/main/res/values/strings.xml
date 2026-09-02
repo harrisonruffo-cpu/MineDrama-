@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Litoral Novelas</string>
+    <string name="nav_for_you">Para Você</string>
+    <string name="nav_novelas">Novelas</string>
+    <string name="nav_explore">Explorar</string>
+    <string name="nav_publish">Publicar</string>
+    <string name="nav_my_list">Minha Lista</string>
+</resources>

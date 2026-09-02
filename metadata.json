@@ -1,0 +1,6 @@
+{
+  "name": "Litoral Novelas",
+  "description": "Aplicativo de streaming e publicação de mini novelas e dramas em formato vertical com suporte a Appwrite e vídeos do YouTube.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
