@@ -77,6 +77,22 @@ object YouTubeHelper {
     }
 
     /**
+     * Converte links de imagens do Google Drive em URL direta via CDN do Google.
+     * Exemplo: https://drive.google.com/file/d/1VWIfZ8lcuPWCc2ijTwvX6WoWnbqkUpO7/view?usp=drivesdk
+     * Retorna: https://lh3.googleusercontent.com/u/0/d/1VWIfZ8lcuPWCc2ijTwvX6WoWnbqkUpO7
+     */
+    fun getDriveDirectImageUrl(url: String?): String? {
+        val fileId = extractGoogleDriveFileId(url) ?: return null
+        return "https://lh3.googleusercontent.com/u/0/d/$fileId"
+    }
+
+    fun normalizeAvatarUrl(url: String?): String {
+        if (url.isNullOrBlank()) return "https://lh3.googleusercontent.com/u/0/d/1VWIfZ8lcuPWCc2ijTwvX6WoWnbqkUpO7"
+        val driveDirect = getDriveDirectImageUrl(url)
+        return driveDirect ?: url
+    }
+
+    /**
      * Extrai o ID do vídeo do Vimeo a partir de links como:
      * - https://vimeo.com/1223423999?share=copy&fl=sv&fe=ci
      * - https://vimeo.com/1223423999

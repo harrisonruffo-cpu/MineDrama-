@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -19,7 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.auth.AuthManager
 import com.example.data.model.Drama
+import com.example.data.util.YouTubeHelper
 import com.example.ui.components.AuthDialog
 import com.example.ui.components.DramaCard
 import com.example.ui.theme.*
@@ -76,32 +79,58 @@ fun MyListScreen(
             Column(modifier = Modifier.padding(14.dp)) {
                 if (currentUser != null) {
                     val user = currentUser!!
+                    val isAdmin = user.email.equals(AuthManager.ADMIN_EMAIL, ignoreCase = true) || user.isAdmin
+                    val effectiveAvatar = if (isAdmin && (user.avatarUrl.isBlank() || user.avatarUrl.contains("unsplash"))) {
+                        AuthManager.ADMIN_AVATAR
+                    } else {
+                        YouTubeHelper.normalizeAvatarUrl(user.avatarUrl.ifBlank { if (isAdmin) AuthManager.ADMIN_AVATAR else "" })
+                    }
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (user.avatarUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = user.avatarUrl,
-                                contentDescription = user.name,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(DramaCrimson),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = user.name.take(1).uppercase(),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp
+                        Box {
+                            if (effectiveAvatar.isNotBlank()) {
+                                AsyncImage(
+                                    model = effectiveAvatar,
+                                    contentDescription = user.name,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .border(
+                                            width = if (isAdmin) 2.5.dp else 1.5.dp,
+                                            color = if (isAdmin) DramaGold else DramaCrimsonBright,
+                                            shape = CircleShape
+                                        )
                                 )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(DramaCrimson),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = user.name.take(1).uppercase(),
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    )
+                                }
+                            }
+                            if (isAdmin) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(DramaGold)
+                                        .align(Alignment.TopStart),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("👑", fontSize = 10.sp)
+                                }
                             }
                         }
 
@@ -115,18 +144,40 @@ fun MyListScreen(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = Color(0xFF1B5E20),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "VIP Nuvem",
-                                        color = Color(0xFFA5D6A7),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                if (isAdmin) {
+                                    Icon(
+                                        Icons.Filled.Verified,
+                                        contentDescription = "Oficial",
+                                        tint = DramaGold,
+                                        modifier = Modifier.size(16.dp)
                                     )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Surface(
+                                        color = Color(0xFFB71C1C),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "👑 ADM OFICIAL",
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                } else {
+                                    Surface(
+                                        color = Color(0xFF1B5E20),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "VIP Nuvem",
+                                            color = Color(0xFFA5D6A7),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
                             Text(
@@ -136,9 +187,20 @@ fun MyListScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.CloudDone, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Sincronizado na Nuvem Appwrite", color = Color(0xFF81C784), fontSize = 11.sp)
+                                if (isAdmin) {
+                                    Icon(Icons.Filled.People, contentDescription = null, tint = DramaGold, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        "${user.followersCount / 1000}.${(user.followersCount % 1000) / 100}K Seguidores • Todos do App ✅",
+                                        color = DramaGold,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                } else {
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Seguindo ADM Harrison Ruffo ✅", color = Color(0xFF81C784), fontSize = 11.sp)
+                                }
                             }
                         }
 

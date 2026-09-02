@@ -33,9 +33,13 @@ data class Drama(
 
 data class UserProfile(
     val id: String = "",
-    val name: String = "Usuário",
-    val email: String = "",
-    val avatarUrl: String = "",
-    val coinsBalance: Int = 100,
-    val isVip: Boolean = false
+    val name: String = "Harrison Ruffo",
+    val email: String = "harrisonruffo@gmail.com",
+    val avatarUrl: String = "https://lh3.googleusercontent.com/u/0/d/1VWIfZ8lcuPWCc2ijTwvX6WoWnbqkUpO7",
+    val coinsBalance: Int = 9999,
+    val isVip: Boolean = true,
+    val role: String = "Desenvolvedor & ADM Oficial",
+    val isAdmin: Boolean = true,
+    val followersCount: Int = 28450,
+    val isFollowingAdmin: Boolean = true
 )

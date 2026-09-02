@@ -19,15 +19,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.auth.AuthManager
 import com.example.data.model.Drama
 import com.example.data.model.Friend
 import com.example.data.social.SocialManager
+import com.example.data.util.YouTubeHelper
 import com.example.ui.components.DramaCard
 import com.example.ui.components.ImageCropperDialog
 import com.example.ui.theme.*
@@ -199,6 +202,14 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(DarkBackground)
     ) {
+        val isAdmin = currentUser?.email?.equals(AuthManager.ADMIN_EMAIL, ignoreCase = true) == true || currentUser?.isAdmin == true
+        val effectiveAvatarUrl = if (isAdmin && (userAvatarUrl.isBlank() || userAvatarUrl.contains("unsplash"))) {
+            AuthManager.ADMIN_AVATAR
+        } else {
+            YouTubeHelper.normalizeAvatarUrl(userAvatarUrl.ifBlank { if (isAdmin) AuthManager.ADMIN_AVATAR else "" })
+        }
+        val totalFollowers = currentUser?.followersCount ?: 28450
+
         // CABEÇALHO DO PERFIL
         Card(
             colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
@@ -208,30 +219,38 @@ fun ProfileScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 18.dp)
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Foto com Botão Flutuante de Edição/Recorte
+                    // Foto com Moldura Especial e Botão de Edição/Recorte
                     Box(
                         modifier = Modifier.clickable { showImageCropperDialog = true }
                     ) {
-                        if (userAvatarUrl.isNotBlank()) {
+                        if (effectiveAvatarUrl.isNotBlank()) {
                             AsyncImage(
-                                model = userAvatarUrl,
+                                model = effectiveAvatarUrl,
                                 contentDescription = editedName,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(76.dp)
+                                    .size(80.dp)
                                     .clip(CircleShape)
-                                    .border(2.5.dp, DramaCrimsonBright, CircleShape)
+                                    .border(
+                                        width = if (isAdmin) 3.dp else 2.5.dp,
+                                        brush = if (isAdmin) {
+                                            Brush.linearGradient(listOf(DramaGold, DramaCrimsonBright, DramaGold))
+                                        } else {
+                                            Brush.linearGradient(listOf(DramaCrimsonBright, DramaCrimson))
+                                        },
+                                        shape = CircleShape
+                                    )
                             )
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(76.dp)
+                                    .size(80.dp)
                                     .clip(CircleShape)
                                     .background(DramaCrimson),
                                 contentAlignment = Alignment.Center
@@ -245,46 +264,84 @@ fun ProfileScreen(
                             }
                         }
 
+                        // Badge de Coroa para ADM Oficial
+                        if (isAdmin) {
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(DramaGold)
+                                    .border(1.5.dp, DarkSurfaceElevated, CircleShape)
+                                    .align(Alignment.TopStart),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("👑", fontSize = 14.sp)
+                            }
+                        }
+
                         // Badge de Câmera / Recorte
                         Box(
                             modifier = Modifier
                                 .size(26.dp)
                                 .clip(CircleShape)
-                                .background(DramaCrimson)
+                                .background(if (isAdmin) DramaGold else DramaCrimson)
+                                .border(1.5.dp, DarkSurfaceElevated, CircleShape)
                                 .align(Alignment.BottomEnd),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PhotoCamera,
                                 contentDescription = "Trocar Foto",
-                                tint = Color.White,
+                                tint = if (isAdmin) Color.Black else Color.White,
                                 modifier = Modifier.size(15.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = editedName,
                                 color = TextPrimary,
-                                fontSize = 18.sp,
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            if (isAdmin) {
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = "Verificado",
+                                    tint = DramaGold,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Surface(
+                                    color = DramaGold.copy(alpha = 0.2f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, DramaGold),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "ADM",
+                                        color = DramaGold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
                             IconButton(
                                 onClick = { showEditProfileDialog = true },
                                 modifier = Modifier.size(24.dp)
                             ) {
-                                Icon(Icons.Filled.Edit, contentDescription = "Editar Nome", tint = DramaCrimsonBright, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Filled.Edit, contentDescription = "Editar Nome", tint = DramaCrimsonBright, modifier = Modifier.size(15.dp))
                             }
                         }
 
                         Text(
-                            text = currentUser?.email ?: "usuario@litoralnovelas.com",
+                            text = currentUser?.email ?: AuthManager.ADMIN_EMAIL,
                             color = TextSecondary,
                             fontSize = 12.sp,
                             maxLines = 1
@@ -292,45 +349,73 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
+                        // Badges Oficiais
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            Surface(
-                                color = Color(0xFF1B5E20),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "VIP Nuvem",
-                                    color = Color(0xFFA5D6A7),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Surface(
-                                color = Color(0xFF1A237E),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "v1.1.5",
-                                    color = Color(0xFF90CAF9),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Surface(
-                                color = Color(0xFF3E2723),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "🪙 300 Moedas",
-                                    color = Color(0xFFFFD54F),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                            if (isAdmin) {
+                                Surface(
+                                    color = Color(0xFFB71C1C),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "👑 ADM Oficial",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Surface(
+                                    color = Color(0xFF0D47A1),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "💻 Dev",
+                                        color = Color(0xFF90CAF9),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Surface(
+                                    color = Color(0xFFF57F17),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "🪙 9.999 Moedas",
+                                        color = Color(0xFFFFF9C4),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                            } else {
+                                Surface(
+                                    color = Color(0xFF1B5E20),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "VIP Nuvem",
+                                        color = Color(0xFFA5D6A7),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Surface(
+                                    color = Color(0xFF3E2723),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "🪙 300 Moedas",
+                                        color = Color(0xFFFFD54F),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -342,12 +427,143 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Bio & Status
-                Text(
-                    text = "Apaixonado por mini novelas e dramas em formato vertical 🌊✨",
-                    color = TextPrimary.copy(alpha = 0.9f),
-                    fontSize = 12.sp
-                )
+                // CARDS DE ESTATÍSTICAS (SEGUIDORES AUTOMÁTICOS)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "${totalFollowers / 1000}.${(totalFollowers % 1000) / 100}K",
+                                color = DramaGold,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "Seguidores",
+                                color = TextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (isAdmin) "Todos do App ✅" else "Seguindo ADM ✅",
+                                color = if (isAdmin) Color(0xFF81C784) else DramaCrimsonBright,
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "1",
+                                color = DramaCrimsonBright,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "Seguindo",
+                                color = TextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Comunidade",
+                                color = TextSecondary,
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "1",
+                                color = Color(0xFF64B5F6),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "Novelas",
+                                color = TextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Dono Do Morro",
+                                color = Color(0xFF90CAF9),
+                                fontSize = 9.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Banner Informativo de Administrador / Seguidor
+                Surface(
+                    color = if (isAdmin) DramaGold.copy(alpha = 0.12f) else DramaCrimson.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isAdmin) DramaGold.copy(alpha = 0.4f) else DramaCrimson.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isAdmin) Icons.Filled.Security else Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = if (isAdmin) DramaGold else DramaCrimsonBright,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = if (isAdmin) {
+                                    "Perfil Principal • Desenvolvedor & ADM Oficial"
+                                } else {
+                                    "Seguidor Oficial de Harrison Ruffo (ADM Oficial)"
+                                },
+                                color = if (isAdmin) DramaGold else Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isAdmin) {
+                                    "Todos que entram no aplicativo viram automaticamente seus seguidores."
+                                } else {
+                                    "Você segue o criador oficial e tem acesso a conteúdos e novidades exclusivas."
+                                },
+                                color = TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -459,9 +675,11 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(friends) { friend ->
+                                val isFriendAdmin = friend.id == "admin_harrison_ruffo" || friend.handle.contains("harrison", ignoreCase = true)
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = DarkSurfaceElevated,
+                                    color = if (isFriendAdmin) Color(0xFF1E1B15) else DarkSurfaceElevated,
+                                    border = if (isFriendAdmin) androidx.compose.foundation.BorderStroke(1.5.dp, DramaGold) else null,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { onOpenChatWithFriend(friend) }
@@ -472,13 +690,30 @@ fun ProfileScreen(
                                     ) {
                                         Box {
                                             AsyncImage(
-                                                model = friend.avatarUrl,
+                                                model = if (isFriendAdmin) AuthManager.ADMIN_AVATAR else friend.avatarUrl,
                                                 contentDescription = friend.name,
                                                 contentScale = ContentScale.Crop,
                                                 modifier = Modifier
-                                                    .size(46.dp)
+                                                    .size(48.dp)
                                                     .clip(CircleShape)
+                                                    .border(
+                                                        width = if (isFriendAdmin) 2.dp else 0.dp,
+                                                        color = if (isFriendAdmin) DramaGold else Color.Transparent,
+                                                        shape = CircleShape
+                                                    )
                                             )
+                                            if (isFriendAdmin) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(16.dp)
+                                                        .clip(CircleShape)
+                                                        .background(DramaGold)
+                                                        .align(Alignment.TopStart),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text("👑", fontSize = 9.sp)
+                                                }
+                                            }
                                             if (friend.isOnline) {
                                                 Box(
                                                     modifier = Modifier
@@ -494,9 +729,21 @@ fun ProfileScreen(
                                         Spacer(modifier = Modifier.width(12.dp))
 
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(friend.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Text(friend.handle, color = DramaCrimsonBright, fontSize = 11.sp)
-                                            if (friend.currentWatching != null) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(friend.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                if (isFriendAdmin) {
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Icon(Icons.Filled.Verified, contentDescription = "Oficial", tint = DramaGold, modifier = Modifier.size(14.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Surface(color = Color(0xFFB71C1C), shape = RoundedCornerShape(3.dp)) {
+                                                        Text("ADM", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                                                    }
+                                                }
+                                            }
+                                            Text(friend.handle, color = if (isFriendAdmin) DramaGold else DramaCrimsonBright, fontSize = 11.sp)
+                                            if (isFriendAdmin) {
+                                                Text("💻 Desenvolvedor Oficial • Você o segue ✅", color = Color(0xFFA5D6A7), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                            } else if (friend.currentWatching != null) {
                                                 Text("Assistindo: ${friend.currentWatching}", color = Color(0xFFA5D6A7), fontSize = 11.sp)
                                             } else {
                                                 Text(friend.status, color = TextSecondary, fontSize = 11.sp, maxLines = 1)
@@ -505,12 +752,12 @@ fun ProfileScreen(
 
                                         IconButton(
                                             onClick = { onOpenChatWithFriend(friend) },
-                                            colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFF005C4B))
+                                            colors = IconButtonDefaults.iconButtonColors(containerColor = if (isFriendAdmin) DramaGold else Color(0xFF005C4B))
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Filled.Chat,
                                                 contentDescription = "Conversar",
-                                                tint = Color.White,
+                                                tint = if (isFriendAdmin) Color.Black else Color.White,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }

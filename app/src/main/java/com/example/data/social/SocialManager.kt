@@ -32,6 +32,17 @@ class SocialManager(private val context: Context) {
     }
 
     private fun loadFriends() {
+        val adminFriend = Friend(
+            id = "admin_harrison_ruffo",
+            name = "Harrison Ruffo",
+            handle = "@harrisonruffo",
+            avatarUrl = "https://lh3.googleusercontent.com/u/0/d/1VWIfZ8lcuPWCc2ijTwvX6WoWnbqkUpO7",
+            status = "👑 Desenvolvedor & ADM Oficial • Criador de Litoral Novelas ✨",
+            isOnline = true,
+            lastSeen = "Desenvolvedor Online",
+            currentWatching = "Dono Do Morro"
+        )
+
         val savedJson = prefs.getString("saved_friends", null)
         if (!savedJson.isNullOrBlank()) {
             try {
@@ -52,15 +63,22 @@ class SocialManager(private val context: Context) {
                         )
                     )
                 }
-                _friends.value = list
+                // Garante que o Desenvolvedor & ADM Oficial Harrison Ruffo sempre esteja no topo
+                val finalList = if (list.none { it.id == adminFriend.id }) {
+                    listOf(adminFriend) + list
+                } else {
+                    list.map { if (it.id == adminFriend.id) adminFriend else it }
+                }
+                _friends.value = finalList
                 return
             } catch (e: Exception) {
                 Log.w(TAG, "Erro parse amigos salvos: ${e.message}")
             }
         }
 
-        // Amigos Padrão da Comunidade Litoral Novelas
+        // Amigos Padrão da Comunidade Litoral Novelas (Harrison Ruffo ADM Oficial no Topo)
         val defaultFriends = listOf(
+            adminFriend,
             Friend(
                 id = "friend_carol",
                 name = "Carolina Lima",
@@ -142,8 +160,21 @@ class SocialManager(private val context: Context) {
             }
         }
 
-        // Conversas Iniciais Padrão
+        // Conversas Iniciais Padrão (com Mensagem de Boas-Vindas do Desenvolvedor & ADM Oficial)
         val defaultMap = mutableMapOf<String, List<ChatMessage>>()
+        defaultMap["admin_harrison_ruffo"] = listOf(
+            ChatMessage(
+                id = "msg_admin_welcome",
+                senderId = "admin_harrison_ruffo",
+                text = "Olá! Seja muito bem-vindo ao Litoral Novelas! Eu sou o Harrison Ruffo, desenvolvedor e administrador oficial do aplicativo. Você já é meu seguidor oficial! Assista ao episódio 1 de 'Dono Do Morro' e aproveite o app!",
+                timestamp = System.currentTimeMillis() - 1000 * 60 * 15,
+                isFromMe = false,
+                isRead = false,
+                sharedDramaId = "drama_dono_do_morro",
+                sharedDramaTitle = "Dono Do Morro",
+                sharedDramaCover = "https://i.vimeocdn.com/video/2196638234-6e47e0cdf557368e0f16e581d68854a5260dca07e563520a0b56fa2119e057ea-d_200x150?region=us"
+            )
+        )
         defaultMap["friend_carol"] = listOf(
             ChatMessage(
                 id = "msg_1",
