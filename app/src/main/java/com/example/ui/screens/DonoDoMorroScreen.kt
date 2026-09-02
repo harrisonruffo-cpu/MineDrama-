@@ -12,6 +12,7 @@ import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,23 +58,36 @@ fun DonoDoMorroScreen(
     modifier: Modifier = Modifier
 ) {
     LocalContext.current
-    val currentYoutubeLink by donoDoMorroManager.ep1Link.collectAsState()
-    val drama = remember(currentYoutubeLink) { donoDoMorroManager.getDrama() }
+    val currentEp1Link by donoDoMorroManager.ep1Link.collectAsState()
+    val currentEp1AltLink by donoDoMorroManager.ep1AltLink.collectAsState()
+    val activePlayerNumber by donoDoMorroManager.activePlayer.collectAsState()
+
+    val drama = remember(currentEp1Link, currentEp1AltLink, activePlayerNumber) {
+        donoDoMorroManager.getDrama(activePlayerNumber)
+    }
+
+    val activeEp1Link = if (activePlayerNumber == 2) currentEp1AltLink else currentEp1Link
 
     var isPlayerActive by remember { mutableStateOf(false) }
     var showLinkEditDialog by remember { mutableStateOf(false) }
-    var tempLinkInput by remember { mutableStateOf(currentYoutubeLink) }
+    var tempLinkInput1 by remember { mutableStateOf(currentEp1Link) }
+    var tempLinkInput2 by remember { mutableStateOf(currentEp1AltLink) }
     var isBuffering by remember { mutableStateOf(true) }
     var isLiked by remember { mutableStateOf(true) }
     var likesCount by remember { mutableLongStateOf(drama.likesCount) }
 
-    val videoId = remember(currentYoutubeLink) {
-        YouTubeHelper.extractVideoId(currentYoutubeLink) ?: "dQw4w9WgXcQ"
+    val vimeoId = remember(activeEp1Link) { YouTubeHelper.extractVimeoId(activeEp1Link) }
+    val isVimeo = vimeoId != null || YouTubeHelper.isVimeoUrl(activeEp1Link)
+    val driveId = remember(activeEp1Link) { YouTubeHelper.extractGoogleDriveFileId(activeEp1Link) }
+    val isDrive = driveId != null
+    val isDirect = remember(activeEp1Link) { YouTubeHelper.isDirectVideoUrl(activeEp1Link) }
+    val videoId = remember(activeEp1Link) {
+        YouTubeHelper.extractVideoId(activeEp1Link) ?: "dQw4w9WgXcQ"
     }
 
     val scrollState = rememberScrollState()
 
-    // Diálogo para atualizar/colar o link do YouTube enviado pelo usuário
+    // Diálogo para atualizar/configurar os links do Episódio 1 (Player 1 e Player 2 Alternativo)
     if (showLinkEditDialog) {
         AlertDialog(
             onDismissRequest = { showLinkEditDialog = false },
@@ -86,21 +100,24 @@ fun DonoDoMorroScreen(
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Link do Episódio 1 (YouTube)", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Gerenciar Players do Ep. 1", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             },
             text = {
                 Column {
                     Text(
-                        text = "Cole aqui o link do YouTube do Episódio 1 da novela Dono Do Morro. Ele será executado direto no app sem sair do APK.",
+                        text = "Configure os links para os dois players alternativos. Ambos rodam direto dentro do APK sem sair do app.",
                         color = TextSecondary,
                         fontSize = 13.sp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    Text("Player 1 Principal (Google Drive / YouTube):", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
-                        value = tempLinkInput,
-                        onValueChange = { tempLinkInput = it },
-                        placeholder = { Text("https://www.youtube.com/watch?v=...", color = TextSecondary) },
+                        value = tempLinkInput1,
+                        onValueChange = { tempLinkInput1 = it },
+                        placeholder = { Text("Link Google Drive ou YouTube", color = TextSecondary, fontSize = 12.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
@@ -110,12 +127,31 @@ fun DonoDoMorroScreen(
                             unfocusedBorderColor = Color.Gray
                         )
                     )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("Player 2 Alternativo (Vimeo / MP4):", color = Color(0xFF1AB7EA), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = tempLinkInput2,
+                        onValueChange = { tempLinkInput2 = it },
+                        placeholder = { Text("https://vimeo.com/...", color = TextSecondary, fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = Color(0xFF1AB7EA),
+                            unfocusedBorderColor = Color.Gray
+                        )
+                    )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        donoDoMorroManager.updateEpisode1Link(tempLinkInput)
+                        donoDoMorroManager.updateEpisode1Link(tempLinkInput1)
+                        donoDoMorroManager.updateEpisode1AltLink(tempLinkInput2)
                         showLinkEditDialog = false
                         isPlayerActive = true
                     },
@@ -176,8 +212,11 @@ fun DonoDoMorroScreen(
                                 setSupportZoom(false)
                                 builtInZoomControls = false
                                 displayZoomControls = false
-                                userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+                                userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
                             }
+                            android.webkit.CookieManager.getInstance().setAcceptCookie(true)
+                            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
                             webChromeClient = object : WebChromeClient() {
                                 override fun getDefaultVideoPoster(): Bitmap? {
                                     return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
@@ -197,14 +236,34 @@ fun DonoDoMorroScreen(
 
                                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                     val dest = request?.url?.toString() ?: ""
+                                    if (dest.contains("youtube.com/watch") || dest.contains("youtu.be/") || dest.contains("drive.google.com/file/d/") || dest.contains("accounts.google.com")) {
+                                        try {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(dest))
+                                            view?.context?.startActivity(intent)
+                                            return true
+                                        } catch (e: Exception) {
+                                            return false
+                                        }
+                                    }
                                     if (dest.startsWith("intent:") || dest.contains("play.google.com") || dest.startsWith("market:")) {
-                                        return true // Bloqueia abertura de app externo
+                                        return true // Bloqueia abertura de loja externa
                                     }
                                     return false
                                 }
                             }
-                            val embedHtml = YouTubeHelper.buildEmbedHtml(videoId)
-                            loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", "https://www.youtube.com")
+                            if (isVimeo && vimeoId != null) {
+                                val vimeoHtml = YouTubeHelper.buildVimeoEmbedHtml(vimeoId)
+                                loadDataWithBaseURL("https://vimeo.com", vimeoHtml, "text/html", "UTF-8", "https://vimeo.com")
+                            } else if (isDrive && driveId != null) {
+                                val driveHtml = YouTubeHelper.buildGoogleDriveEmbedHtml(driveId)
+                                loadDataWithBaseURL("https://drive.google.com", driveHtml, "text/html", "UTF-8", "https://drive.google.com")
+                            } else if (isDirect) {
+                                val directHtml = YouTubeHelper.buildHtml5VideoHtml(activeEp1Link)
+                                loadDataWithBaseURL(null, directHtml, "text/html", "UTF-8", null)
+                            } else {
+                                val embedHtml = YouTubeHelper.buildEmbedHtml(videoId)
+                                loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", "https://www.youtube.com")
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -213,6 +272,45 @@ fun DonoDoMorroScreen(
                 if (isBuffering) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = DramaCrimsonBright)
+                    }
+                }
+
+                // Indicador do Player Ativo com botão de troca rápida
+                Surface(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .clickable {
+                            val nextPlayer = if (activePlayerNumber == 1) 2 else 1
+                            donoDoMorroManager.setActivePlayer(nextPlayer)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (activePlayerNumber == 2) Icons.Filled.Bolt else Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = if (activePlayerNumber == 2) Color(0xFF1AB7EA) else DramaCrimsonBright,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (activePlayerNumber == 2) "Player 2: Vimeo" else "Player 1: Drive",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "• Trocar",
+                            color = DramaGold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
 
@@ -421,10 +519,10 @@ fun DonoDoMorroScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // BOTÃO PRINCIPAL DE PLAYER DO EPISÓDIO 1 (LINK CAMUFLADO, REPRODUZ DIRETO NO APP SEM SAIR DO APK)
+            // BOTÃO 1: PLAYER PRINCIPAL DO EPISÓDIO 1 (GOOGLE DRIVE / YOUTUBE)
             Button(
                 onClick = {
-                    // Link camuflado: ao clicar no botão de player do episódio 1, inicia imediatamente a reprodução
+                    donoDoMorroManager.setActivePlayer(1)
                     isPlayerActive = true
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = DramaCrimson),
@@ -432,7 +530,7 @@ fun DonoDoMorroScreen(
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(52.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
@@ -442,14 +540,116 @@ fun DonoDoMorroScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Assistir Episódio 1 Agora",
+                    text = "Assistir Episódio 1 (Player 1)",
                     color = Color.White,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // BOTÃO 2: ASSISTIR 2 ALTERNATIVO (VIMEO HD) - EXATAMENTE O PEDIDO PELO USUÁRIO
+            Button(
+                onClick = {
+                    donoDoMorroManager.setActivePlayer(2)
+                    isPlayerActive = true
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF1AB7EA) // Azul oficial vibrante Vimeo
+                ),
+                shape = RoundedCornerShape(12.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Assistir 2 Alternativo (Vimeo HD)",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // SELETOR RÁPIDO DE PLAYERS (CHIPS)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = if (activePlayerNumber == 1) DramaCrimson.copy(alpha = 0.25f) else DarkSurfaceElevated,
+                    border = BorderStroke(1.dp, if (activePlayerNumber == 1) DramaCrimson else Color.Transparent),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            donoDoMorroManager.setActivePlayer(1)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = if (activePlayerNumber == 1) DramaCrimsonBright else TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Player 1: Drive",
+                            color = if (activePlayerNumber == 1) Color.White else TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = if (activePlayerNumber == 1) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+
+                Surface(
+                    color = if (activePlayerNumber == 2) Color(0xFF1AB7EA).copy(alpha = 0.25f) else DarkSurfaceElevated,
+                    border = BorderStroke(1.dp, if (activePlayerNumber == 2) Color(0xFF1AB7EA) else Color.Transparent),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            donoDoMorroManager.setActivePlayer(2)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.Bolt,
+                            contentDescription = null,
+                            tint = if (activePlayerNumber == 2) Color(0xFF1AB7EA) else TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Player 2: Vimeo",
+                            color = if (activePlayerNumber == 2) Color.White else TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = if (activePlayerNumber == 2) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Botão secundário para assistir no modo Feed Vertical (Reels / TikTok)
             OutlinedButton(
@@ -465,12 +665,13 @@ fun DonoDoMorroScreen(
                 Text("Assistir no Modo Feed Vertical", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Botão para gerenciar/colar link do YouTube do Episódio 1 (total liberdade para o usuário enviar o link dele)
+            // Botão para gerenciar/colar link dos Players do Episódio 1
             TextButton(
                 onClick = {
-                    tempLinkInput = currentYoutubeLink
+                    tempLinkInput1 = currentEp1Link
+                    tempLinkInput2 = currentEp1AltLink
                     showLinkEditDialog = true
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -478,7 +679,7 @@ fun DonoDoMorroScreen(
                 Icon(Icons.Filled.Edit, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Configurar / Trocar Link do YouTube (Episódio 1)",
+                    text = "Configurar / Trocar Links dos Players (Drive / Vimeo)",
                     color = TextSecondary,
                     fontSize = 12.sp
                 )
@@ -575,8 +776,11 @@ fun DonoDoMorroScreen(
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (index == 0) "YouTube Integrado • Sem sair do APK" else "Lançamento Exclusivo",
-                                color = TextSecondary,
+                                text = if (index == 0) {
+                                    if (activePlayerNumber == 2) "Player 2: Vimeo HD ativo • Direto no APK"
+                                    else "Player 1: Drive ativo • Direto no APK"
+                                } else "Lançamento Exclusivo",
+                                color = if (index == 0 && activePlayerNumber == 2) Color(0xFF1AB7EA) else TextSecondary,
                                 fontSize = 11.sp
                             )
                         }

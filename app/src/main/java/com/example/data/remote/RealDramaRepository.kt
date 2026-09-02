@@ -181,7 +181,7 @@ class RealDramaRepository(private val context: Context) : DramaApiService {
                         dramaId = "drama_dono_do_morro",
                         episodeNumber = 1,
                         title = "Episódio 1: A Chegada do Malvadão",
-                        videoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        videoUrl = "https://drive.google.com/file/d/1qhB6ie6zskXrROdm7oqN6T5aOvZHjlMT/view?usp=drivesdk",
                         durationSeconds = 120,
                         isFree = true,
                         thumbnail = "dono_do_morro_cover"

@@ -87,11 +87,23 @@ fun VerticalEpisodePlayer(
         YouTubeHelper.extractVideoId(videoSource)
     }
 
+    val driveFileId = remember(videoSource) {
+        YouTubeHelper.extractGoogleDriveFileId(videoSource)
+    }
+    val isDrive = driveFileId != null
+
+    val vimeoVideoId = remember(videoSource) {
+        YouTubeHelper.extractVimeoId(videoSource)
+    }
+    val isVimeo = vimeoVideoId != null || YouTubeHelper.isVimeoUrl(videoSource)
+
+    val isWebViewVideo = (isYouTube && youtubeVideoId != null) || isDrive || isVimeo
+
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     // Configuração robusta do ExoPlayer para streams diretos (MP4 / HLS)
-    val exoPlayer = remember(videoSource, isYouTube) {
-        if (isYouTube) {
+    val exoPlayer = remember(videoSource, isWebViewVideo) {
+        if (isWebViewVideo) {
             null
         } else {
             try {
@@ -195,8 +207,8 @@ fun VerticalEpisodePlayer(
             )
         }
 
-        if (isYouTube && youtubeVideoId != null) {
-            // Renderização do YouTube via WebView 100% interna sem sair do APK
+        if (isWebViewVideo) {
+            // Renderização do YouTube ou Google Drive via WebView 100% interna sem sair do APK
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
@@ -224,8 +236,10 @@ fun VerticalEpisodePlayer(
                             setSupportZoom(false)
                             builtInZoomControls = false
                             displayZoomControls = false
-                            userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+                            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
                         }
+                        android.webkit.CookieManager.getInstance().setAcceptCookie(true)
+                        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
                         webChromeClient = object : WebChromeClient() {
                             override fun getDefaultVideoPoster(): Bitmap? {
@@ -241,7 +255,15 @@ fun VerticalEpisodePlayer(
 
                             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                 val destUrl = request?.url?.toString() ?: ""
-                                // Bloqueia qualquer tentativa de escapar para o YouTube externo ou Play Store
+                                if (destUrl.contains("youtube.com/watch") || destUrl.contains("youtu.be/") || destUrl.contains("drive.google.com/file/d/") || destUrl.contains("accounts.google.com")) {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(destUrl))
+                                        view?.context?.startActivity(intent)
+                                        return true
+                                    } catch (e: Exception) {
+                                        return false
+                                    }
+                                }
                                 if (destUrl.startsWith("intent:") || destUrl.contains("play.google.com") || destUrl.startsWith("market:")) {
                                     return true
                                 }
@@ -249,8 +271,16 @@ fun VerticalEpisodePlayer(
                             }
                         }
 
-                        val embedHtml = YouTubeHelper.buildEmbedHtml(youtubeVideoId)
-                        loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", "https://www.youtube.com")
+                        if (isDrive && driveFileId != null) {
+                            val embedHtml = YouTubeHelper.buildGoogleDriveEmbedHtml(driveFileId)
+                            loadDataWithBaseURL("https://drive.google.com", embedHtml, "text/html", "UTF-8", "https://drive.google.com")
+                        } else if (isVimeo && vimeoVideoId != null) {
+                            val embedHtml = YouTubeHelper.buildVimeoEmbedHtml(vimeoVideoId)
+                            loadDataWithBaseURL("https://vimeo.com", embedHtml, "text/html", "UTF-8", "https://vimeo.com")
+                        } else if (youtubeVideoId != null) {
+                            val embedHtml = YouTubeHelper.buildEmbedHtml(youtubeVideoId)
+                            loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", "https://www.youtube.com")
+                        }
                         webViewRef = this
                     }
                 },
