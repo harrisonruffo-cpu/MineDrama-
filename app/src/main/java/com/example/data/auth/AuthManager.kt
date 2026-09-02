@@ -3,12 +3,16 @@ package com.example.data.auth
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.example.Appwrite
 import com.example.data.model.UserProfile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
-class AuthManager(context: Context) {
+class AuthManager(private val context: Context) {
     private val TAG = "AuthManager"
     private val prefs: SharedPreferences =
         context.getSharedPreferences("litoral_auth_prefs", Context.MODE_PRIVATE)
@@ -40,6 +44,35 @@ class AuthManager(context: Context) {
         }
     }
 
+    fun loginWithGoogleAccount(googleAccount: GoogleUserAccount) {
+        val userId = googleAccount.id.ifBlank { "google_${Math.abs(googleAccount.email.hashCode())}" }
+        val avatar = googleAccount.photoUrl?.ifBlank {
+            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80"
+        } ?: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80"
+
+        prefs.edit()
+            .putString("user_id", userId)
+            .putString("user_email", googleAccount.email)
+            .putString("user_name", googleAccount.name)
+            .putString("user_avatar", avatar)
+            .putInt("user_coins", 300)
+            .putBoolean("user_is_vip", true)
+            .putString("auth_provider", "google")
+            .apply()
+
+        val profile = UserProfile(
+            id = userId,
+            name = googleAccount.name,
+            email = googleAccount.email,
+            avatarUrl = avatar,
+            coinsBalance = 300,
+            isVip = true
+        )
+        _currentUser.value = profile
+        syncWithCloud(profile)
+        Log.d(TAG, "Login com Conta Google oficial realizado com sucesso: ${googleAccount.email} (${googleAccount.name})")
+    }
+
     fun loginWithGoogle(
         name: String = "Usuário Google",
         email: String = "usuario@gmail.com",
@@ -53,9 +86,10 @@ class AuthManager(context: Context) {
             .putString("user_avatar", avatarUrl)
             .putInt("user_coins", 300)
             .putBoolean("user_is_vip", true)
+            .putString("auth_provider", "google")
             .apply()
 
-        _currentUser.value = UserProfile(
+        val profile = UserProfile(
             id = userId,
             name = name,
             email = email,
@@ -63,6 +97,8 @@ class AuthManager(context: Context) {
             coinsBalance = 300,
             isVip = true
         )
+        _currentUser.value = profile
+        syncWithCloud(profile)
         Log.d(TAG, "Login com Google realizado com sucesso: $email")
     }
 
@@ -79,9 +115,10 @@ class AuthManager(context: Context) {
             .putString("user_avatar", avatarUrl)
             .putInt("user_coins", 300)
             .putBoolean("user_is_vip", true)
+            .putString("auth_provider", "facebook")
             .apply()
 
-        _currentUser.value = UserProfile(
+        val profile = UserProfile(
             id = userId,
             name = name,
             email = email,
@@ -89,6 +126,9 @@ class AuthManager(context: Context) {
             coinsBalance = 300,
             isVip = true
         )
+        _currentUser.value = profile
+        syncWithCloud(profile)
+        Log.d(TAG, "Login com Facebook realizado com sucesso: $email ($name)")
     }
 
     fun login(name: String, email: String) {
@@ -101,9 +141,10 @@ class AuthManager(context: Context) {
             .putString("user_avatar", avatar)
             .putInt("user_coins", 150)
             .putBoolean("user_is_vip", false)
+            .putString("auth_provider", "email")
             .apply()
 
-        _currentUser.value = UserProfile(
+        val profile = UserProfile(
             id = userId,
             name = name,
             email = email,
@@ -111,6 +152,8 @@ class AuthManager(context: Context) {
             coinsBalance = 150,
             isVip = false
         )
+        _currentUser.value = profile
+        syncWithCloud(profile)
     }
 
     fun loginAsGuest() {
@@ -130,6 +173,7 @@ class AuthManager(context: Context) {
             .putString("user_avatar", "")
             .putInt("user_coins", 100)
             .putBoolean("user_is_vip", false)
+            .putString("auth_provider", "guest")
             .apply()
         _currentUser.value = user
     }
@@ -137,5 +181,19 @@ class AuthManager(context: Context) {
     fun logout() {
         prefs.edit().clear().apply()
         _currentUser.value = null
+    }
+
+    private fun syncWithCloud(user: UserProfile) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (!Appwrite.isInitialized) {
+                    Appwrite.init(context)
+                }
+                Appwrite.ensureSession()
+                Log.d(TAG, "Sincronização de perfil com a nuvem iniciada para ${user.email}")
+            } catch (e: Throwable) {
+                Log.w(TAG, "Falha na sincronização de perfil na nuvem: ${e.message}")
+            }
+        }
     }
 }

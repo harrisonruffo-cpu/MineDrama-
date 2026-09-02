@@ -6,10 +6,12 @@ import android.net.Uri
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.annotation.OptIn
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -22,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -138,6 +141,18 @@ fun VerticalEpisodePlayer(
         }
     }
 
+    DisposableEffect(isYouTube, youtubeVideoId) {
+        onDispose {
+            try {
+                webViewRef?.apply {
+                    loadUrl("about:blank")
+                    onPause()
+                    pauseTimers()
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
     LaunchedEffect(isPlaying, isPlayerPaused, isYouTube) {
         if (isYouTube) {
             try {
@@ -159,7 +174,7 @@ fun VerticalEpisodePlayer(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Thumbnail de fundo para evitar tela preta durante carregamento da superfície de vídeo
+        // Thumbnail de fundo para transição suave durante o buffer inicial
         val posterImage = remember(youtubeVideoId, drama.coverUrl) {
             if (youtubeVideoId != null) {
                 YouTubeHelper.getThumbnailUrl(youtubeVideoId)
@@ -168,24 +183,30 @@ fun VerticalEpisodePlayer(
             }
         }
 
-        AsyncImage(
-            model = posterImage,
-            contentDescription = drama.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (isVideoBuffering) {
+            AsyncImage(
+                model = posterImage,
+                contentDescription = drama.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         if (isYouTube && youtubeVideoId != null) {
-            // Renderização do YouTube via WebView com Aceleração por Hardware nativa e ChromeClient
+            // Renderização do YouTube via WebView com Aceleração de Hardware por Camada e WebChromeClient
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
+                        // Crucial para renderizar codecs e superfícies de vídeo sem tela preta
                         setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        isFocusable = true
+                        isFocusableInTouchMode = true
+
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
                         settings.apply {
                             javaScriptEnabled = true
@@ -198,7 +219,11 @@ fun VerticalEpisodePlayer(
                             allowFileAccess = true
                             allowContentAccess = true
                             cacheMode = WebSettings.LOAD_DEFAULT
-                            userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                            setSupportZoom(false)
+                            builtInZoomControls = false
+                            displayZoomControls = false
+                            // User-Agent moderno padrão para visualização mobile completa
+                            userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                         }
 
                         webChromeClient = object : WebChromeClient() {
@@ -213,7 +238,7 @@ fun VerticalEpisodePlayer(
                                 isVideoBuffering = false
                             }
 
-                            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                 return false
                             }
                         }
@@ -250,33 +275,27 @@ fun VerticalEpisodePlayer(
             )
         }
 
-        // Camada transparente de Gestos (Toque único para pausar/despausar, Toque duplo para curtir)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(isYouTube, youtubeVideoId) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            showHeartAnimation = true
-                            if (!isLiked) {
-                                onToggleLike()
-                            }
-                        },
-                        onTap = {
-                            isPlayerPaused = !isPlayerPaused
-                            if (isYouTube) {
-                                if (isPlayerPaused) {
-                                    webViewRef?.evaluateJavascript("pauseVideo();", null)
-                                } else {
-                                    webViewRef?.evaluateJavascript("playVideo();", null)
+        // Camada de Gestos (Apenas para vídeos diretos ou áreas superiores para não bloquear WebView)
+        if (!isYouTube) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(isYouTube, youtubeVideoId) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                showHeartAnimation = true
+                                if (!isLiked) {
+                                    onToggleLike()
                                 }
-                            } else {
+                            },
+                            onTap = {
+                                isPlayerPaused = !isPlayerPaused
                                 exoPlayer?.playWhenReady = !isPlayerPaused
                             }
-                        }
-                    )
-                }
-        )
+                        )
+                    }
+            )
+        }
 
         // Overlay de Pausa
         if (isPlayerPaused) {
@@ -447,3 +466,4 @@ fun VerticalEpisodePlayer(
         }
     }
 }
+

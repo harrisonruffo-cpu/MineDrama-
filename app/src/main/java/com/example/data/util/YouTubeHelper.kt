@@ -2,19 +2,21 @@ package com.example.data.util
 
 object YouTubeHelper {
     /**
-     * Extrai o ID de um vídeo do YouTube a partir de qualquer formato de link:
+     * Extrai o ID do vídeo do YouTube a partir de qualquer formato de link:
      * - https://www.youtube.com/watch?v=dQw4w9WgXcQ
      * - https://youtu.be/dQw4w9WgXcQ?si=abc
      * - https://www.youtube.com/shorts/dQw4w9WgXcQ
      * - https://www.youtube.com/embed/dQw4w9WgXcQ
      * - https://m.youtube.com/watch?v=dQw4w9WgXcQ
      * - https://youtube.com/v/dQw4w9WgXcQ
+     * - https://www.youtube.com/live/dQw4w9WgXcQ
+     * - ou o próprio ID direto de 11 caracteres
      */
     fun extractVideoId(url: String?): String? {
         if (url.isNullOrBlank()) return null
         val trimmed = url.trim()
 
-        // Se já for apenas o ID de 11 caracteres alfanuméricos
+        // Se já for apenas o ID de 11 caracteres alfanuméricos com traços/underlines
         if (trimmed.length == 11 && trimmed.matches(Regex("^[a-zA-Z0-9_-]{11}$"))) {
             return trimmed
         }
@@ -49,8 +51,8 @@ object YouTubeHelper {
     }
 
     /**
-     * Gera HTML completo e compatível com a YouTube IFrame API e aceleração por hardware,
-     * garantindo que a superfície de vídeo seja renderizada sem tela preta.
+     * Gera HTML otimizado com a YouTube IFrame API e aceleração por hardware e viewport vertical.
+     * Corrige problemas de renderização onde apenas o áudio era reproduzido sem imagem de vídeo no WebView.
      */
     fun buildEmbedHtml(videoId: String): String {
         return """
@@ -64,25 +66,25 @@ object YouTubeHelper {
                         margin: 0;
                         padding: 0;
                         box-sizing: border-box;
-                        background: #000000;
                     }
                     html, body {
-                        width: 100vw;
-                        height: 100vh;
+                        width: 100%;
+                        height: 100%;
                         overflow: hidden;
-                        background-color: #000000;
+                        background: #000000 !important;
                         display: flex;
                         align-items: center;
                         justify-content: center;
                     }
                     .video-wrapper {
                         position: relative;
-                        width: 100%;
-                        height: 100%;
+                        width: 100vw;
+                        height: 100vh;
+                        overflow: hidden;
+                        background: #000000;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        background-color: #000000;
                     }
                     #player {
                         width: 100%;
@@ -90,7 +92,9 @@ object YouTubeHelper {
                         position: absolute;
                         top: 0;
                         left: 0;
-                        border: 0;
+                        right: 0;
+                        bottom: 0;
+                        border: none;
                     }
                 </style>
             </head>
@@ -115,7 +119,7 @@ object YouTubeHelper {
                                 'controls': 1,
                                 'rel': 0,
                                 'modestbranding': 1,
-                                'fs': 1,
+                                'fs': 0,
                                 'loop': 1,
                                 'playlist': '$videoId',
                                 'enablejsapi': 1,

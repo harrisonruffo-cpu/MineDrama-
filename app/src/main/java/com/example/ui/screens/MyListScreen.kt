@@ -43,14 +43,15 @@ fun MyListScreen(
                 viewModel.login(name, email)
                 showAuthDialog = false
             },
-            onGoogleLogin = {
-                viewModel.loginWithGoogle()
+            onGoogleAccountLogin = { account ->
+                viewModel.loginWithGoogleAccount(account)
                 showAuthDialog = false
             },
-            onFacebookLogin = {
-                viewModel.loginWithFacebook()
+            onFacebookSuccess = { name, email, avatar ->
+                viewModel.loginWithFacebook(name, email, avatar)
                 showAuthDialog = false
-            }
+            },
+            googleAuthHelper = viewModel.googleAuthHelper
         )
     }
 

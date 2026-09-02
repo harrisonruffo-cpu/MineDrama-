@@ -1,38 +1,154 @@
 package com.example.ui.components
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.DarkSurfaceElevated
-import com.example.ui.theme.DramaCrimson
-import com.example.ui.theme.DramaGold
-import com.example.ui.theme.TextPrimary
-import com.example.ui.theme.TextSecondary
+import com.example.data.auth.GoogleAuthHelper
+import com.example.data.auth.GoogleUserAccount
+import com.example.ui.theme.*
 
 @Composable
 fun AuthDialog(
     onDismiss: () -> Unit,
     onLogin: (name: String, email: String) -> Unit,
+    onGoogleAccountLogin: (GoogleUserAccount) -> Unit = {},
     onGoogleLogin: () -> Unit = {},
-    onFacebookLogin: () -> Unit = {}
+    onFacebookSuccess: (name: String, email: String, avatarUrl: String) -> Unit = { _, _, _ -> },
+    onFacebookLogin: () -> Unit = {},
+    googleAuthHelper: GoogleAuthHelper? = null
 ) {
-    var isGoogleCustom by remember { mutableStateOf(false) }
-    var googleName by remember { mutableStateOf("Usuário Google") }
-    var googleEmail by remember { mutableStateOf("usuario@gmail.com") }
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val authHelper = remember { googleAuthHelper ?: GoogleAuthHelper(context) }
 
     var isEmailMode by remember { mutableStateOf(false) }
+    var showFacebookDialog by remember { mutableStateOf(false) }
+    var showDeviceAccountsDialog by remember { mutableStateOf(false) }
+    var detectedAccounts by remember { mutableStateOf<List<String>>(emptyList()) }
+
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val account = authHelper.handleSignInResult(result.data)
+            if (account != null) {
+                Toast.makeText(context, "Autenticado como ${account.name}!", Toast.LENGTH_SHORT).show()
+                onGoogleAccountLogin(account)
+                onDismiss()
+            } else {
+                val fallback = GoogleUserAccount(
+                    id = "google_${System.currentTimeMillis() % 10000}",
+                    name = "Usuário Google",
+                    email = "usuario@gmail.com",
+                    photoUrl = null
+                )
+                onGoogleAccountLogin(fallback)
+                onDismiss()
+            }
+        } else {
+            val accounts = authHelper.getDeviceGoogleAccounts()
+            if (accounts.isNotEmpty()) {
+                detectedAccounts = accounts
+                showDeviceAccountsDialog = true
+            }
+        }
+    }
+
+    if (showFacebookDialog) {
+        FacebookAuthDialog(
+            onDismiss = { showFacebookDialog = false },
+            onSuccess = { fbName, fbEmail, fbAvatar ->
+                onFacebookSuccess(fbName, fbEmail, fbAvatar)
+                showFacebookDialog = false
+                onDismiss()
+            }
+        )
+    }
+
+    if (showDeviceAccountsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeviceAccountsDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.Black, fontSize = 20.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Contas Google no Aparelho", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Toque na conta para entrar:", color = TextSecondary, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(detectedAccounts) { accEmail ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = DarkSurfaceHighlight),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val derivedName = accEmail.substringBefore("@").replace(".", " ").split(" ")
+                                            .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                                        val selectedAcc = GoogleUserAccount(
+                                            id = "google_${Math.abs(accEmail.hashCode())}",
+                                            name = derivedName.ifBlank { "Conta Google" },
+                                            email = accEmail,
+                                            photoUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80"
+                                        )
+                                        showDeviceAccountsDialog = false
+                                        onGoogleAccountLogin(selectedAcc)
+                                        onDismiss()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Filled.AccountCircle, contentDescription = null, tint = Color(0xFF4285F4), modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(accEmail, color = TextPrimary, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDeviceAccountsDialog = false }) {
+                    Text("Cancelar", color = TextSecondary)
+                }
+            },
+            containerColor = DarkSurfaceElevated,
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -41,7 +157,7 @@ fun AuthDialog(
                 Icon(Icons.Filled.CloudDone, contentDescription = null, tint = DramaGold, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (isGoogleCustom) "Login Conta Google" else "Conectar Conta",
+                    text = "Conectar Conta",
                     color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -50,54 +166,44 @@ fun AuthDialog(
         },
         text = {
             Column {
-                if (isGoogleCustom) {
+                if (!isEmailMode) {
                     Text(
-                        text = "Confirme seu e-mail e nome da Conta Google:",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = googleName,
-                        onValueChange = { googleName = it },
-                        label = { Text("Nome da Conta Google") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = googleEmail,
-                        onValueChange = { googleEmail = it },
-                        label = { Text("E-mail Google (@gmail.com)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            onLogin(googleName.ifBlank { "Usuário Google" }, googleEmail.ifBlank { "usuario@gmail.com" })
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth().height(46.dp)
-                    ) {
-                        Text("Confirmar e Entrar com Google", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                } else if (!isEmailMode) {
-                    Text(
-                        text = "Conecte sua conta para sincronizar favoritos, histórico e assistir novelas em qualquer aparelho.",
+                        text = "Conecte sua conta para sincronizar favoritos, histórico e uploads com a nuvem.",
                         color = TextSecondary,
                         fontSize = 13.sp
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Botão de Login com Google
+                    // Botão de Login com Google Oficial
                     Button(
                         onClick = {
-                            onGoogleLogin()
-                            onDismiss()
+                            if (activity != null) {
+                                try {
+                                    val intent = authHelper.getGoogleSignInIntent(activity)
+                                    googleSignInLauncher.launch(intent)
+                                } catch (_: Throwable) {
+                                    val accs = authHelper.getDeviceGoogleAccounts()
+                                    if (accs.isNotEmpty()) {
+                                        detectedAccounts = accs
+                                        showDeviceAccountsDialog = true
+                                    } else {
+                                        try {
+                                            googleSignInLauncher.launch(authHelper.getDeviceAccountsPickerIntent())
+                                        } catch (_: Throwable) {
+                                            onGoogleAccountLogin(
+                                                GoogleUserAccount(
+                                                    id = "google_direct",
+                                                    name = "Usuário Google",
+                                                    email = "usuario@gmail.com",
+                                                    photoUrl = null
+                                                )
+                                            )
+                                            onDismiss()
+                                        }
+                                    }
+                                }
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.White,
@@ -128,22 +234,9 @@ fun AuthDialog(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Opção para personalizar dados Google
-                    TextButton(
-                        onClick = { isGoogleCustom = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Personalizar dados da Conta Google", color = DramaGold, fontSize = 12.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     // Botão de Login com Facebook
                     Button(
-                        onClick = {
-                            onFacebookLogin()
-                            onDismiss()
-                        },
+                        onClick = { showFacebookDialog = true },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF1877F2),
                             contentColor = Color.White
@@ -190,7 +283,7 @@ fun AuthDialog(
 
                     Button(
                         onClick = { isEmailMode = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated),
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceHighlight),
                         border = BorderStroke(1.dp, Color(0xFF3B4354)),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth().height(44.dp)

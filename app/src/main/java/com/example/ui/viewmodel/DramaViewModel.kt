@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.auth.AuthManager
+import com.example.data.auth.GoogleAuthHelper
+import com.example.data.auth.GoogleUserAccount
 import com.example.data.local.AppDatabase
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.HistoryEntity
@@ -20,6 +22,7 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "DramaViewModel"
     private val repository = RealDramaRepository(application)
     private val authManager = AuthManager(application)
+    val googleAuthHelper = GoogleAuthHelper(application)
     private val db = AppDatabase.getDatabase(application)
     private val diagnosticManager = CloudDiagnosticManager(application)
 
@@ -232,6 +235,10 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun login(name: String, email: String) {
         authManager.login(name, email)
+    }
+
+    fun loginWithGoogleAccount(account: GoogleUserAccount) {
+        authManager.loginWithGoogleAccount(account)
     }
 
     fun loginWithGoogle(

@@ -118,8 +118,9 @@ fun MainScreen(
 
     if (currentUser == null) {
         LoginGateScreen(
-            onGoogleLogin = { dramaViewModel.loginWithGoogle() },
-            onFacebookLogin = { dramaViewModel.loginWithFacebook() },
+            googleAuthHelper = dramaViewModel.googleAuthHelper,
+            onGoogleAccountLogin = { dramaViewModel.loginWithGoogleAccount(it) },
+            onFacebookSuccess = { name, email, avatar -> dramaViewModel.loginWithFacebook(name, email, avatar) },
             onEmailLogin = { name, email -> dramaViewModel.login(name, email) },
             onGuestLogin = { dramaViewModel.loginAsGuest() }
         )
@@ -133,14 +134,15 @@ fun MainScreen(
                 dramaViewModel.login(name, email)
                 showAuthDialog = false
             },
-            onGoogleLogin = {
-                dramaViewModel.loginWithGoogle()
+            onGoogleAccountLogin = { account ->
+                dramaViewModel.loginWithGoogleAccount(account)
                 showAuthDialog = false
             },
-            onFacebookLogin = {
-                dramaViewModel.loginWithFacebook()
+            onFacebookSuccess = { name, email, avatar ->
+                dramaViewModel.loginWithFacebook(name, email, avatar)
                 showAuthDialog = false
-            }
+            },
+            googleAuthHelper = dramaViewModel.googleAuthHelper
         )
     }
 
