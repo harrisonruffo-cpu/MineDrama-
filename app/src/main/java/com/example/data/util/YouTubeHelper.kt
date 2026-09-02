@@ -51,10 +51,12 @@ object YouTubeHelper {
     }
 
     /**
-     * Gera HTML otimizado com a YouTube IFrame API e aceleração por hardware e viewport vertical.
-     * Corrige problemas de renderização onde apenas o áudio era reproduzido sem imagem de vídeo no WebView.
+     * Gera HTML otimizado com IFrame sem restrições de origem, compatível com aceleração de hardware
+     * e ajustado para formato vertical de tela cheia sem disparar erro de 'Vídeo indisponível'.
      */
     fun buildEmbedHtml(videoId: String): String {
+        val embedUrl = "https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&playsinline=1&enablejsapi=1&rel=0&iv_load_policy=3&modestbranding=1&controls=1&showinfo=0"
+
         return """
             <!DOCTYPE html>
             <html lang="pt-BR">
@@ -76,7 +78,7 @@ object YouTubeHelper {
                         align-items: center;
                         justify-content: center;
                     }
-                    .video-wrapper {
+                    .player-container {
                         position: relative;
                         width: 100vw;
                         height: 100vh;
@@ -86,76 +88,39 @@ object YouTubeHelper {
                         align-items: center;
                         justify-content: center;
                     }
-                    #player {
+                    iframe {
                         width: 100%;
                         height: 100%;
+                        border: 0;
                         position: absolute;
                         top: 0;
                         left: 0;
                         right: 0;
                         bottom: 0;
-                        border: none;
                     }
                 </style>
             </head>
             <body>
-                <div class="video-wrapper">
-                    <div id="player"></div>
+                <div class="player-container">
+                    <iframe 
+                        id="ytIframe"
+                        src="$embedUrl"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                        allowfullscreen>
+                    </iframe>
                 </div>
 
                 <script>
-                    var tag = document.createElement('script');
-                    tag.src = "https://www.youtube.com/iframe_api";
-                    var firstScriptTag = document.getElementsByTagName('script')[0];
-                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-                    var ytPlayer;
-                    function onYouTubeIframeAPIReady() {
-                        ytPlayer = new YT.Player('player', {
-                            videoId: '$videoId',
-                            playerVars: {
-                                'autoplay': 1,
-                                'playsinline': 1,
-                                'controls': 1,
-                                'rel': 0,
-                                'modestbranding': 1,
-                                'fs': 0,
-                                'loop': 1,
-                                'playlist': '$videoId',
-                                'enablejsapi': 1,
-                                'iv_load_policy': 3,
-                                'origin': 'https://www.youtube.com'
-                            },
-                            events: {
-                                'onReady': onPlayerReady,
-                                'onStateChange': onPlayerStateChange
-                            }
-                        });
-                    }
-
-                    function onPlayerReady(event) {
-                        try {
-                            event.target.playVideo();
-                        } catch (e) {}
-                    }
-
-                    function onPlayerStateChange(event) {
-                        // Estado do player atualizado
-                    }
-
                     function playVideo() {
                         try {
-                            if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
-                                ytPlayer.playVideo();
-                            }
+                            var ifr = document.getElementById('ytIframe');
+                            ifr.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
                         } catch (e) {}
                     }
-
                     function pauseVideo() {
                         try {
-                            if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
-                                ytPlayer.pauseVideo();
-                            }
+                            var ifr = document.getElementById('ytIframe');
+                            ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
                         } catch (e) {}
                     }
                 </script>

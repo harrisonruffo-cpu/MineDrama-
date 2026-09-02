@@ -23,6 +23,7 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = RealDramaRepository(application)
     private val authManager = AuthManager(application)
     val googleAuthHelper = GoogleAuthHelper(application)
+    val socialManager = com.example.data.social.SocialManager(application)
     private val db = AppDatabase.getDatabase(application)
     private val diagnosticManager = CloudDiagnosticManager(application)
 
@@ -263,5 +264,9 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         authManager.logout()
+    }
+
+    fun updateUserProfile(name: String, avatarUrl: String) {
+        authManager.updateProfile(name, avatarUrl)
     }
 }

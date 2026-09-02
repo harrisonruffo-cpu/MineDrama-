@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
@@ -13,6 +14,7 @@ import android.webkit.WebViewClient
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -24,7 +26,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -174,7 +175,7 @@ fun VerticalEpisodePlayer(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Thumbnail de fundo para transição suave durante o buffer inicial
+        // Thumbnail de fundo para transição suave
         val posterImage = remember(youtubeVideoId, drama.coverUrl) {
             if (youtubeVideoId != null) {
                 YouTubeHelper.getThumbnailUrl(youtubeVideoId)
@@ -193,11 +194,10 @@ fun VerticalEpisodePlayer(
         }
 
         if (isYouTube && youtubeVideoId != null) {
-            // Renderização do YouTube via WebView com Aceleração de Hardware por Camada e WebChromeClient
+            // Renderização do YouTube via WebView com Aceleração de Hardware por Camada e IFrame limpo
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
-                        // Crucial para renderizar codecs e superfícies de vídeo sem tela preta
                         setLayerType(View.LAYER_TYPE_HARDWARE, null)
                         setBackgroundColor(android.graphics.Color.BLACK)
                         isFocusable = true
@@ -222,7 +222,6 @@ fun VerticalEpisodePlayer(
                             setSupportZoom(false)
                             builtInZoomControls = false
                             displayZoomControls = false
-                            // User-Agent moderno padrão para visualização mobile completa
                             userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                         }
 
@@ -244,7 +243,7 @@ fun VerticalEpisodePlayer(
                         }
 
                         val embedHtml = YouTubeHelper.buildEmbedHtml(youtubeVideoId)
-                        loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", "https://www.youtube.com")
+                        loadDataWithBaseURL("https://www.youtube-nocookie.com", embedHtml, "text/html", "UTF-8", "https://www.youtube-nocookie.com")
                         webViewRef = this
                     }
                 },
@@ -254,7 +253,7 @@ fun VerticalEpisodePlayer(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Player de Vídeo ExoPlayer (MP4 / HLS) com AspectRatioFrameLayout e Shutter transparente
+            // Player de Vídeo ExoPlayer (MP4 / HLS)
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -275,7 +274,7 @@ fun VerticalEpisodePlayer(
             )
         }
 
-        // Camada de Gestos (Apenas para vídeos diretos ou áreas superiores para não bloquear WebView)
+        // Camada de Gestos para Vídeos Diretos
         if (!isYouTube) {
             Box(
                 modifier = Modifier
@@ -295,6 +294,44 @@ fun VerticalEpisodePlayer(
                         )
                     }
             )
+        }
+
+        // Botão flutuante de abertura direta no YouTube (caso o canal tenha restrições)
+        if (isYouTube && youtubeVideoId != null) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.65f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 40.dp, end = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://www.youtube.com/watch?v=$youtubeVideoId")
+                            )
+                            context.startActivity(intent)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.OpenInNew,
+                        contentDescription = "Abrir no YouTube",
+                        tint = Color(0xFFFF4444),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "YouTube",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         // Overlay de Pausa
@@ -322,7 +359,7 @@ fun VerticalEpisodePlayer(
             }
         }
 
-        // Indicador de Carregamento (Buffer)
+        // Indicador de Buffer
         if (isVideoBuffering) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -341,7 +378,7 @@ fun VerticalEpisodePlayer(
             onAnimationEnd = { showHeartAnimation = false }
         )
 
-        // Gradiente Inferior para facilitar a leitura dos textos e controles
+        // Gradiente Inferior
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -354,7 +391,7 @@ fun VerticalEpisodePlayer(
                 )
         )
 
-        // Informações da Novela (Inferior Esquerdo)
+        // Informações da Novela
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -408,7 +445,7 @@ fun VerticalEpisodePlayer(
             }
         }
 
-        // Ações Laterais (Inferior Direito)
+        // Ações Laterais
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -416,7 +453,7 @@ fun VerticalEpisodePlayer(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Botão de Curtir
+            // Curtir
             IconButton(
                 onClick = onToggleLike,
                 modifier = Modifier
@@ -432,7 +469,7 @@ fun VerticalEpisodePlayer(
                 )
             }
 
-            // Lista de Episódios
+            // Episódios
             IconButton(
                 onClick = onOpenEpisodesSheet,
                 modifier = Modifier
@@ -448,7 +485,7 @@ fun VerticalEpisodePlayer(
                 )
             }
 
-            // Próximo Episódio
+            // Próximo
             IconButton(
                 onClick = onNextEpisode,
                 modifier = Modifier
@@ -466,4 +503,3 @@ fun VerticalEpisodePlayer(
         }
     }
 }
-

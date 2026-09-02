@@ -178,6 +178,18 @@ class AuthManager(private val context: Context) {
         _currentUser.value = user
     }
 
+    fun updateProfile(name: String, avatarUrl: String) {
+        val current = _currentUser.value ?: return
+        val updated = current.copy(name = name, avatarUrl = avatarUrl)
+        prefs.edit()
+            .putString("user_name", name)
+            .putString("user_avatar", avatarUrl)
+            .apply()
+        _currentUser.value = updated
+        syncWithCloud(updated)
+        Log.d(TAG, "Perfil atualizado: $name, avatar=$avatarUrl")
+    }
+
     fun logout() {
         prefs.edit().clear().apply()
         _currentUser.value = null

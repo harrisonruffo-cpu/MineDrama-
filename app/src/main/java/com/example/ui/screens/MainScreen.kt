@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Drama
+import com.example.data.model.Friend
 import com.example.ui.components.AuthDialog
 import com.example.ui.components.EpisodesBottomSheet
 import com.example.ui.components.VerticalEpisodePlayer
@@ -30,6 +31,7 @@ fun MainScreen(
     val context = LocalContext.current
     var currentNavIndex by remember { mutableIntStateOf(0) }
     var selectedDramaForDetail by remember { mutableStateOf<Drama?>(null) }
+    var activeChatFriend by remember { mutableStateOf<Friend?>(null) }
     var showAuthDialog by remember { mutableStateOf(false) }
     var showEpisodesSheet by remember { mutableStateOf(false) }
     var showExitConfirmDialog by remember { mutableStateOf(false) }
@@ -39,6 +41,10 @@ fun MainScreen(
     val currentEpisodeIndex by dramaViewModel.currentEpisodeIndex.collectAsState()
     val favoriteDramaIds by dramaViewModel.favoriteDramaIds.collectAsState()
     val currentUser by dramaViewModel.currentUser.collectAsState()
+
+    val favoriteDramas = remember(allDramas, favoriteIdsMap(favoriteDramaIds)) {
+        allDramas.filter { favoriteDramaIds.contains(it.id) }
+    }
 
     // Gerenciador do Botão Voltar do Android
     BackHandler {
@@ -51,6 +57,9 @@ fun MainScreen(
             }
             showEpisodesSheet -> {
                 showEpisodesSheet = false
+            }
+            activeChatFriend != null -> {
+                activeChatFriend = null
             }
             selectedDramaForDetail != null -> {
                 selectedDramaForDetail = null
@@ -160,7 +169,7 @@ fun MainScreen(
 
     Scaffold(
         bottomBar = {
-            if (selectedDramaForDetail == null) {
+            if (selectedDramaForDetail == null && activeChatFriend == null) {
                 NavigationBar(
                     containerColor = DarkSurface,
                     contentColor = DramaCrimson
@@ -220,8 +229,8 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = currentNavIndex == 4,
                         onClick = { currentNavIndex = 4 },
-                        icon = { Icon(Icons.Filled.Favorite, contentDescription = "Minha Lista") },
-                        label = { Text("Minha Lista", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
+                        icon = { Icon(Icons.Filled.AccountCircle, contentDescription = "Perfil") },
+                        label = { Text("Perfil", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DramaCrimson,
                             selectedTextColor = DramaCrimson,
@@ -238,58 +247,78 @@ fun MainScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(if (selectedDramaForDetail == null) innerPadding else PaddingValues())
+                .padding(if (selectedDramaForDetail == null && activeChatFriend == null) innerPadding else PaddingValues())
         ) {
-            if (selectedDramaForDetail != null) {
-                DramaDetailScreen(
-                    drama = selectedDramaForDetail!!,
-                    viewModel = dramaViewModel,
-                    onBack = { selectedDramaForDetail = null },
-                    onPlayEpisode = { epIdx ->
-                        dramaViewModel.selectDrama(selectedDramaForDetail!!, epIdx)
-                        selectedDramaForDetail = null
-                        currentNavIndex = 0
-                    }
-                )
-            } else {
-                when (currentNavIndex) {
-                    0 -> {
-                        // FEED VERTICAL (Estilo TikTok / Reels)
-                        if (allDramas.isNotEmpty()) {
-                            val activeDrama = currentDrama ?: allDramas.first()
-                            val episodes = activeDrama.episodes
-                            if (episodes.isNotEmpty()) {
-                                val currentEp = episodes.getOrNull(currentEpisodeIndex) ?: episodes.first()
-                                VerticalEpisodePlayer(
-                                    drama = activeDrama,
-                                    episode = currentEp,
-                                    isPlaying = true,
-                                    isLiked = favoriteDramaIds.contains(activeDrama.id),
-                                    onToggleLike = { dramaViewModel.toggleFavorite(activeDrama.id) },
-                                    onOpenEpisodesSheet = { showEpisodesSheet = true },
-                                    onNextEpisode = { dramaViewModel.nextEpisode() }
-                                )
+            when {
+                activeChatFriend != null -> {
+                    ChatDetailScreen(
+                        friend = activeChatFriend!!,
+                        socialManager = dramaViewModel.socialManager,
+                        favoriteDramas = favoriteDramas,
+                        onBack = { activeChatFriend = null },
+                        onOpenDrama = { drama ->
+                            activeChatFriend = null
+                            dramaViewModel.selectDrama(drama, 0)
+                            currentNavIndex = 0
+                        }
+                    )
+                }
+                selectedDramaForDetail != null -> {
+                    DramaDetailScreen(
+                        drama = selectedDramaForDetail!!,
+                        viewModel = dramaViewModel,
+                        onBack = { selectedDramaForDetail = null },
+                        onPlayEpisode = { epIdx ->
+                            dramaViewModel.selectDrama(selectedDramaForDetail!!, epIdx)
+                            selectedDramaForDetail = null
+                            currentNavIndex = 0
+                        }
+                    )
+                }
+                else -> {
+                    when (currentNavIndex) {
+                        0 -> {
+                            // FEED VERTICAL (Estilo TikTok / Reels)
+                            if (allDramas.isNotEmpty()) {
+                                val activeDrama = currentDrama ?: allDramas.first()
+                                val episodes = activeDrama.episodes
+                                if (episodes.isNotEmpty()) {
+                                    val currentEp = episodes.getOrNull(currentEpisodeIndex) ?: episodes.first()
+                                    VerticalEpisodePlayer(
+                                        drama = activeDrama,
+                                        episode = currentEp,
+                                        isPlaying = true,
+                                        isLiked = favoriteDramaIds.contains(activeDrama.id),
+                                        onToggleLike = { dramaViewModel.toggleFavorite(activeDrama.id) },
+                                        onOpenEpisodesSheet = { showEpisodesSheet = true },
+                                        onNextEpisode = { dramaViewModel.nextEpisode() }
+                                    )
+                                }
                             }
                         }
+                        1 -> NovelasCatalogScreen(
+                            viewModel = dramaViewModel,
+                            onDramaSelected = { drama -> selectedDramaForDetail = drama }
+                        )
+                        2 -> ExploreSearchScreen(
+                            viewModel = dramaViewModel,
+                            onDramaSelected = { drama -> selectedDramaForDetail = drama }
+                        )
+                        3 -> PublishDramaScreen(
+                            viewModel = dramaViewModel,
+                            uploadViewModel = uploadViewModel
+                        )
+                        4 -> ProfileScreen(
+                            viewModel = dramaViewModel,
+                            socialManager = dramaViewModel.socialManager,
+                            onDramaSelected = { drama -> selectedDramaForDetail = drama },
+                            onOpenChatWithFriend = { friend -> activeChatFriend = friend }
+                        )
                     }
-                    1 -> NovelasCatalogScreen(
-                        viewModel = dramaViewModel,
-                        onDramaSelected = { drama -> selectedDramaForDetail = drama }
-                    )
-                    2 -> ExploreSearchScreen(
-                        viewModel = dramaViewModel,
-                        onDramaSelected = { drama -> selectedDramaForDetail = drama }
-                    )
-                    3 -> PublishDramaScreen(
-                        viewModel = dramaViewModel,
-                        uploadViewModel = uploadViewModel
-                    )
-                    4 -> MyListScreen(
-                        viewModel = dramaViewModel,
-                        onDramaSelected = { drama -> selectedDramaForDetail = drama }
-                    )
                 }
             }
         }
     }
 }
+
+private fun favoriteIdsMap(ids: Set<String>): Any = ids
