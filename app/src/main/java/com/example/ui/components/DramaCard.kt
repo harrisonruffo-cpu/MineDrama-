@@ -50,7 +50,7 @@ fun DramaCard(
                     .background(Color(0xFF1E2330))
             ) {
                 AsyncImage(
-                    model = drama.coverUrl.ifBlank { drama.bannerUrl },
+                    model = com.example.ui.util.AppImageResolver.resolve(drama.coverUrl.ifBlank { drama.bannerUrl }),
                     contentDescription = drama.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

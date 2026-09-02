@@ -52,7 +52,7 @@ fun HeroBannerCarousel(
                     .clickable { onDramaClick(drama) }
             ) {
                 AsyncImage(
-                    model = drama.bannerUrl.ifBlank { drama.coverUrl },
+                    model = com.example.ui.util.AppImageResolver.resolve(drama.bannerUrl.ifBlank { drama.coverUrl }),
                     contentDescription = drama.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

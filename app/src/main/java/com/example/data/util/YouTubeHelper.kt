@@ -52,10 +52,11 @@ object YouTubeHelper {
 
     /**
      * Gera HTML otimizado com IFrame sem restrições de origem, compatível com aceleração de hardware
-     * e ajustado para formato vertical de tela cheia sem disparar erro de 'Vídeo indisponível'.
+     * e ajustado para formato vertical/tela cheia sem disparar erro de 'Vídeo indisponível'.
+     * O vídeo é executado 100% dentro do APK sem jamais redirecionar para fora.
      */
     fun buildEmbedHtml(videoId: String): String {
-        val embedUrl = "https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&playsinline=1&enablejsapi=1&rel=0&iv_load_policy=3&modestbranding=1&controls=1&showinfo=0"
+        val embedUrl = "https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&enablejsapi=1&rel=0&iv_load_policy=3&modestbranding=1&controls=1&showinfo=0&origin=https://www.youtube.com"
 
         return """
             <!DOCTYPE html>
@@ -68,21 +69,20 @@ object YouTubeHelper {
                         margin: 0;
                         padding: 0;
                         box-sizing: border-box;
+                        -webkit-tap-highlight-color: transparent;
                     }
                     html, body {
                         width: 100%;
                         height: 100%;
                         overflow: hidden;
                         background: #000000 !important;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
                     }
                     .player-container {
-                        position: relative;
-                        width: 100vw;
-                        height: 100vh;
-                        overflow: hidden;
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
                         background: #000000;
                         display: flex;
                         align-items: center;
@@ -92,11 +92,6 @@ object YouTubeHelper {
                         width: 100%;
                         height: 100%;
                         border: 0;
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        bottom: 0;
                     }
                 </style>
             </head>
@@ -105,7 +100,7 @@ object YouTubeHelper {
                     <iframe 
                         id="ytIframe"
                         src="$embedUrl"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                         allowfullscreen>
                     </iframe>
                 </div>

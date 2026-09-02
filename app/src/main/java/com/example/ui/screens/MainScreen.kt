@@ -41,6 +41,7 @@ fun MainScreen(
     val currentEpisodeIndex by dramaViewModel.currentEpisodeIndex.collectAsState()
     val favoriteDramaIds by dramaViewModel.favoriteDramaIds.collectAsState()
     val currentUser by dramaViewModel.currentUser.collectAsState()
+    val donoDoMorroManager = remember { com.example.data.util.DonoDoMorroManager(context.applicationContext) }
 
     val favoriteDramas = remember(allDramas, favoriteIdsMap(favoriteDramaIds)) {
         allDramas.filter { favoriteDramaIds.contains(it.id) }
@@ -177,8 +178,8 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = currentNavIndex == 0,
                         onClick = { currentNavIndex = 0 },
-                        icon = { Icon(Icons.Filled.PlayCircle, contentDescription = "Para Você") },
-                        label = { Text("Para Você", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
+                        icon = { Icon(Icons.Filled.Whatshot, contentDescription = "Dono Do Morro") },
+                        label = { Text("Dono Do Morro", fontSize = 9.sp, fontWeight = FontWeight.Bold) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DramaCrimson,
                             selectedTextColor = DramaCrimson,
@@ -190,8 +191,8 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = currentNavIndex == 1,
                         onClick = { currentNavIndex = 1 },
-                        icon = { Icon(Icons.Filled.Tv, contentDescription = "Novelas") },
-                        label = { Text("Novelas", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
+                        icon = { Icon(Icons.Filled.PlayCircle, contentDescription = "Para Você") },
+                        label = { Text("Para Você", fontSize = 9.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DramaCrimson,
                             selectedTextColor = DramaCrimson,
@@ -203,8 +204,8 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = currentNavIndex == 2,
                         onClick = { currentNavIndex = 2 },
-                        icon = { Icon(Icons.Filled.Search, contentDescription = "Explorar") },
-                        label = { Text("Explorar", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
+                        icon = { Icon(Icons.Filled.Tv, contentDescription = "Novelas") },
+                        label = { Text("Novelas", fontSize = 9.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DramaCrimson,
                             selectedTextColor = DramaCrimson,
@@ -217,7 +218,7 @@ fun MainScreen(
                         selected = currentNavIndex == 3,
                         onClick = { currentNavIndex = 3 },
                         icon = { Icon(Icons.Filled.CloudUpload, contentDescription = "Publicar") },
-                        label = { Text("Publicar", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
+                        label = { Text("Publicar", fontSize = 9.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DramaCrimson,
                             selectedTextColor = DramaCrimson,
@@ -230,7 +231,7 @@ fun MainScreen(
                         selected = currentNavIndex == 4,
                         onClick = { currentNavIndex = 4 },
                         icon = { Icon(Icons.Filled.AccountCircle, contentDescription = "Perfil") },
-                        label = { Text("Perfil", fontSize = 10.sp, fontWeight = FontWeight.Medium) },
+                        label = { Text("Perfil", fontSize = 9.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = DramaCrimson,
                             selectedTextColor = DramaCrimson,
@@ -271,13 +272,24 @@ fun MainScreen(
                         onPlayEpisode = { epIdx ->
                             dramaViewModel.selectDrama(selectedDramaForDetail!!, epIdx)
                             selectedDramaForDetail = null
-                            currentNavIndex = 0
+                            currentNavIndex = 1
                         }
                     )
                 }
                 else -> {
                     when (currentNavIndex) {
                         0 -> {
+                            // ABA EXCLUSIVA DE NOVELA PRONTA PRA ASSISTIR: DONO DO MORRO
+                            DonoDoMorroScreen(
+                                donoDoMorroManager = donoDoMorroManager,
+                                onPlayInFeed = { epIdx ->
+                                    val morroDrama = donoDoMorroManager.getDrama()
+                                    dramaViewModel.selectDrama(morroDrama, epIdx)
+                                    currentNavIndex = 1
+                                }
+                            )
+                        }
+                        1 -> {
                             // FEED VERTICAL (Estilo TikTok / Reels)
                             if (allDramas.isNotEmpty()) {
                                 val activeDrama = currentDrama ?: allDramas.first()
@@ -296,11 +308,7 @@ fun MainScreen(
                                 }
                             }
                         }
-                        1 -> NovelasCatalogScreen(
-                            viewModel = dramaViewModel,
-                            onDramaSelected = { drama -> selectedDramaForDetail = drama }
-                        )
-                        2 -> ExploreSearchScreen(
+                        2 -> NovelasCatalogScreen(
                             viewModel = dramaViewModel,
                             onDramaSelected = { drama -> selectedDramaForDetail = drama }
                         )

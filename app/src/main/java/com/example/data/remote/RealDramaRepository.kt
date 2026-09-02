@@ -163,6 +163,63 @@ class RealDramaRepository(private val context: Context) : DramaApiService {
     private fun getSeedDramas(): List<Drama> {
         return listOf(
             Drama(
+                id = "drama_dono_do_morro",
+                title = "Dono Do Morro",
+                description = "Série Brasileira Ação Favela",
+                coverUrl = "dono_do_morro_cover",
+                bannerUrl = "dono_do_morro_banner",
+                genre = "Ação Favela",
+                totalEpisodes = 4,
+                rating = 5.0,
+                viewsCount = 980000L,
+                likesCount = 145000L,
+                isTrending = true,
+                isFeatured = true,
+                episodes = listOf(
+                    Episode(
+                        id = "ep_morro_1",
+                        dramaId = "drama_dono_do_morro",
+                        episodeNumber = 1,
+                        title = "Episódio 1: A Chegada do Malvadão",
+                        videoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        durationSeconds = 120,
+                        isFree = true,
+                        thumbnail = "dono_do_morro_cover"
+                    ),
+                    Episode(
+                        id = "ep_morro_2",
+                        dramaId = "drama_dono_do_morro",
+                        episodeNumber = 2,
+                        title = "Episódio 2: A Lei da Favela",
+                        videoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        durationSeconds = 115,
+                        isFree = true,
+                        thumbnail = "dono_do_morro_cover"
+                    ),
+                    Episode(
+                        id = "ep_morro_3",
+                        dramaId = "drama_dono_do_morro",
+                        episodeNumber = 3,
+                        title = "Episódio 3: O Cerco no Beco",
+                        videoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        durationSeconds = 130,
+                        isFree = false,
+                        thumbnail = "dono_do_morro_cover"
+                    ),
+                    Episode(
+                        id = "ep_morro_4",
+                        dramaId = "drama_dono_do_morro",
+                        episodeNumber = 4,
+                        title = "Episódio 4: O Trono do Morro",
+                        videoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        durationSeconds = 145,
+                        isFree = false,
+                        thumbnail = "dono_do_morro_cover"
+                    )
+                ),
+                createdAt = 1800000000000L
+            ),
+            Drama(
                 id = "drama_litoral_1",
                 title = "O Segredo da Baía",
                 description = "Um mistério envolvente que acontece nas noites de verão do litoral sul.",

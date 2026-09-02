@@ -177,10 +177,12 @@ fun VerticalEpisodePlayer(
     ) {
         // Thumbnail de fundo para transição suave
         val posterImage = remember(youtubeVideoId, drama.coverUrl) {
-            if (youtubeVideoId != null) {
+            if (drama.id.contains("dono_do_morro", ignoreCase = true) || drama.title.contains("Morro", ignoreCase = true)) {
+                com.example.ui.util.AppImageResolver.resolve(drama.coverUrl)
+            } else if (youtubeVideoId != null) {
                 YouTubeHelper.getThumbnailUrl(youtubeVideoId)
             } else {
-                drama.coverUrl
+                com.example.ui.util.AppImageResolver.resolve(drama.coverUrl)
             }
         }
 
@@ -194,7 +196,7 @@ fun VerticalEpisodePlayer(
         }
 
         if (isYouTube && youtubeVideoId != null) {
-            // Renderização do YouTube via WebView com Aceleração de Hardware por Camada e IFrame limpo
+            // Renderização do YouTube via WebView 100% interna sem sair do APK
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
@@ -238,12 +240,17 @@ fun VerticalEpisodePlayer(
                             }
 
                             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                val destUrl = request?.url?.toString() ?: ""
+                                // Bloqueia qualquer tentativa de escapar para o YouTube externo ou Play Store
+                                if (destUrl.startsWith("intent:") || destUrl.contains("play.google.com") || destUrl.startsWith("market:")) {
+                                    return true
+                                }
                                 return false
                             }
                         }
 
                         val embedHtml = YouTubeHelper.buildEmbedHtml(youtubeVideoId)
-                        loadDataWithBaseURL("https://www.youtube-nocookie.com", embedHtml, "text/html", "UTF-8", "https://www.youtube-nocookie.com")
+                        loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", "https://www.youtube.com")
                         webViewRef = this
                     }
                 },
@@ -296,38 +303,30 @@ fun VerticalEpisodePlayer(
             )
         }
 
-        // Botão flutuante de abertura direta no YouTube (caso o canal tenha restrições)
+        // Indicador de Qualidade HD / Série Exclusiva (Sem sair do APK)
         if (isYouTube && youtubeVideoId != null) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = Color.Black.copy(alpha = 0.65f),
+                color = Color.Black.copy(alpha = 0.7f),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 40.dp, end = 12.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .clickable {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://www.youtube.com/watch?v=$youtubeVideoId")
-                            )
-                            context.startActivity(intent)
-                        }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.OpenInNew,
-                        contentDescription = "Abrir no YouTube",
-                        tint = Color(0xFFFF4444),
+                        imageVector = Icons.Filled.Tv,
+                        contentDescription = "Player Nativo",
+                        tint = DramaCrimsonBright,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "YouTube",
+                        text = "PLAYER INTERNO",
                         color = Color.White,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
