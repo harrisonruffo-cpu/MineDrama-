@@ -309,6 +309,18 @@ fun ProfileScreen(
                                 )
                             }
                             Surface(
+                                color = Color(0xFF1A237E),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "v1.1.5",
+                                    color = Color(0xFF90CAF9),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Surface(
                                 color = Color(0xFF3E2723),
                                 shape = RoundedCornerShape(4.dp)
                             ) {

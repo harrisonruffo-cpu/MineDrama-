@@ -35,7 +35,7 @@ class AppwriteDramaDataSource {
             val dramas = response.documents.mapNotNull { doc ->
                 mapDocumentToDrama(doc)
             }
-            Log.d(TAG, "Total de dramas carregados da Nuvem Appwrite: ${dramas.size}")
+            Log.d(TAG, "Total de dramas carregados do Appwrite NYC Cloud: ${dramas.size}")
             dramas
         } catch (e: Throwable) {
             Log.e(TAG, "Erro ao listar dramas do Appwrite: ${e.message}")
@@ -60,7 +60,7 @@ class AppwriteDramaDataSource {
                             put("durationSeconds", ep.durationSeconds)
                             put("isFree", ep.isFree)
                             put("thumbnail", ep.thumbnail)
-                            put("localUri", ep.localUri ?: "")
+                            put("localUri", "")
                         }
                     )
                 }
@@ -69,44 +69,50 @@ class AppwriteDramaDataSource {
             val docId = if (drama.id.isNotBlank() && drama.id.length <= 36 && !drama.id.contains(" ") && !drama.id.contains("-")) {
                 drama.id.replace(Regex("[^a-zA-Z0-9_]"), "_").take(36)
             } else {
-                ID.unique()
+                "drama_" + (System.currentTimeMillis() % 1000000000)
             }
 
-            val primaryPayload = mutableMapOf<String, Any>(
+            // Múltiplos formatos para garantir compatibilidade com qualquer schema no Appwrite
+            val payloadFull = mutableMapOf<String, Any>(
                 "title" to drama.title,
+                "description" to (drama.description.ifBlank { "Novela exclusiva Litoral Novelas." }),
                 "synopsis" to (drama.description.ifBlank { "Novela exclusiva Litoral Novelas." }),
                 "coverUrl" to drama.coverUrl,
-                "tags" to drama.genre,
-                "episodes" to listOf(episodesJson),
-                "authorName" to listOf("Litoral Novelas"),
-                "createdAt" to listOf(drama.createdAt.toString()),
-                "views" to listOf(drama.viewsCount.toString()),
-                "rating" to drama.rating.toString()
-            )
-
-            val singleTypePayload = mutableMapOf<String, Any>(
-                "title" to drama.title,
-                "synopsis" to (drama.description.ifBlank { "Novela exclusiva Litoral Novelas." }),
-                "coverUrl" to drama.coverUrl,
+                "genre" to drama.genre,
                 "tags" to drama.genre,
                 "episodes" to episodesJson,
+                "episodesJson" to episodesJson,
                 "authorName" to "Litoral Novelas",
                 "createdAt" to drama.createdAt.toString(),
                 "views" to drama.viewsCount.toString(),
                 "rating" to drama.rating.toString()
             )
 
-            val legacyPayload = mutableMapOf<String, Any>(
+            val payloadClassic = mutableMapOf<String, Any>(
                 "title" to drama.title,
                 "description" to drama.description,
                 "coverUrl" to drama.coverUrl,
                 "genre" to drama.genre,
-                "episodesJson" to episodesJson,
-                "rating" to drama.rating.toString()
+                "episodesJson" to episodesJson
             )
 
-            val payloadsToTry = listOf(primaryPayload, singleTypePayload, legacyPayload)
+            val payloadArrayEpisodes = mutableMapOf<String, Any>(
+                "title" to drama.title,
+                "synopsis" to drama.description,
+                "coverUrl" to drama.coverUrl,
+                "tags" to listOf(drama.genre),
+                "episodes" to listOf(episodesJson)
+            )
+
+            val payloadMinimal = mutableMapOf<String, Any>(
+                "title" to drama.title,
+                "coverUrl" to drama.coverUrl,
+                "episodes" to episodesJson
+            )
+
+            val payloadsToTry = listOf(payloadFull, payloadClassic, payloadArrayEpisodes, payloadMinimal)
             var saved = false
+
             for ((index, currentPayload) in payloadsToTry.withIndex()) {
                 if (saved) break
                 try {
@@ -117,7 +123,7 @@ class AppwriteDramaDataSource {
                             documentId = docId,
                             data = currentPayload
                         )
-                        Log.d(TAG, "Drama atualizado com sucesso no Appwrite (tentativa $index): $docId")
+                        Log.d(TAG, "Drama atualizado com sucesso no Appwrite (payload $index): $docId")
                         saved = true
                     } catch (_: Throwable) {
                         db.createDocument(
@@ -126,11 +132,11 @@ class AppwriteDramaDataSource {
                             documentId = docId,
                             data = currentPayload
                         )
-                        Log.d(TAG, "Drama criado com sucesso no Appwrite (tentativa $index): $docId")
+                        Log.d(TAG, "Drama criado com sucesso no Appwrite (payload $index): $docId")
                         saved = true
                     }
                 } catch (e: Throwable) {
-                    Log.w(TAG, "Tentativa $index falhou ao salvar no Appwrite: ${e.message}")
+                    Log.w(TAG, "Tentativa de payload $index falhou no Appwrite: ${e.message}")
                 }
             }
             saved
@@ -149,6 +155,7 @@ class AppwriteDramaDataSource {
                 is String -> raw
                 else -> null
             }
+
             if (!epRaw.isNullOrBlank()) {
                 try {
                     val arr = JSONArray(epRaw)
@@ -164,20 +171,20 @@ class AppwriteDramaDataSource {
                                 durationSeconds = obj.optInt("durationSeconds", 90),
                                 isFree = obj.optBoolean("isFree", true),
                                 thumbnail = obj.optString("thumbnail"),
-                                localUri = obj.optString("localUri").takeIf { it.isNotBlank() }
+                                localUri = null
                             )
                         )
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Erro parse episodesJson: ${e.message}")
+                    Log.w(TAG, "Erro ao parsear episodesJson: ${e.message}")
                 }
             }
 
-            val desc = (data["synopsis"] ?: data["description"])?.let {
+            val desc = (data["description"] ?: data["synopsis"])?.let {
                 if (it is List<*>) it.firstOrNull()?.toString() else it.toString()
             } ?: ""
 
-            val genreTag = (data["tags"] ?: data["genre"])?.let {
+            val genreTag = (data["genre"] ?: data["tags"])?.let {
                 if (it is List<*>) it.firstOrNull()?.toString() else it.toString()
             } ?: "Romance"
 
@@ -186,12 +193,16 @@ class AppwriteDramaDataSource {
                 else (it as? Number)?.toDouble() ?: it.toString().toDoubleOrNull()
             } ?: 4.9
 
+            val cover = (data["coverUrl"] as? String)?.ifBlank {
+                "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?auto=format&fit=crop&w=600&q=80"
+            } ?: "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?auto=format&fit=crop&w=600&q=80"
+
             Drama(
                 id = doc.id,
                 title = (data["title"] as? String) ?: "Sem Título",
                 description = desc,
-                coverUrl = (data["coverUrl"] as? String) ?: "",
-                bannerUrl = (data["coverUrl"] as? String) ?: "",
+                coverUrl = cover,
+                bannerUrl = cover,
                 genre = genreTag,
                 totalEpisodes = episodes.size.coerceAtLeast(1),
                 rating = ratingVal,
@@ -203,7 +214,7 @@ class AppwriteDramaDataSource {
                 isPublishedLocally = false
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Erro mapeando documento: ${e.message}")
+            Log.e(TAG, "Erro mapeando documento do Appwrite: ${e.message}")
             null
         }
     }

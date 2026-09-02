@@ -35,6 +35,9 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isSyncingCloud = MutableStateFlow(false)
+    val isSyncingCloud: StateFlow<Boolean> = _isSyncingCloud.asStateFlow()
+
     private val _currentDrama = MutableStateFlow<Drama?>(null)
     val currentDrama: StateFlow<Drama?> = _currentDrama.asStateFlow()
 
@@ -82,6 +85,25 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "Erro ao carregar dramas: ${e.message}")
             } finally {
                 _isLoading.value = false
+            }
+        }
+    }
+
+    fun syncCloudData(onFinished: ((Int) -> Unit)? = null) {
+        viewModelScope.launch {
+            _isSyncingCloud.value = true
+            try {
+                val list = repository.syncCloudDramas()
+                _allDramas.value = list
+                if (_currentDrama.value == null && list.isNotEmpty()) {
+                    _currentDrama.value = list.first()
+                }
+                onFinished?.invoke(list.size)
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro na sincronização manual da nuvem: ${e.message}")
+                onFinished?.invoke(_allDramas.value.size)
+            } finally {
+                _isSyncingCloud.value = false
             }
         }
     }
@@ -230,6 +252,22 @@ class DramaViewModel(application: Application) : AndroidViewModel(application) {
                 val updated = list[index].copy(title = newTitle)
                 repository.publishDrama(updated)
                 loadDramas()
+            }
+        }
+    }
+
+    fun deleteDrama(dramaId: String) {
+        viewModelScope.launch {
+            try {
+                db.dramaDao().deleteDrama(dramaId)
+                db.dramaDao().deleteEpisodesForDrama(dramaId)
+                val list = _allDramas.value.filterNot { it.id == dramaId }
+                _allDramas.value = list
+                if (_currentDrama.value?.id == dramaId) {
+                    _currentDrama.value = list.firstOrNull()
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Erro ao excluir novela: ${e.message}")
             }
         }
     }

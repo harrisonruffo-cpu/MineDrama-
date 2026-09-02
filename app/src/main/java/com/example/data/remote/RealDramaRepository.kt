@@ -15,7 +15,7 @@ class RealDramaRepository(private val context: Context) : DramaApiService {
     private val TAG = "RealDramaRepo"
     private val localStore = LocalPublishedDramaStore(context)
     private val db = AppDatabase.getDatabase(context)
-    private val appwriteDS = AppwriteDramaDataSource()
+    private val cloudSyncManager = CloudSyncManager(context)
 
     override suspend fun getTrendingDramas(): List<Drama> = withContext(Dispatchers.IO) {
         val all = syncCloudDramas()
@@ -38,10 +38,7 @@ class RealDramaRepository(private val context: Context) : DramaApiService {
     }
 
     override suspend fun publishDrama(drama: Drama): Boolean = withContext(Dispatchers.IO) {
-        // 1. Salva de forma persistente e imediata no armazenamento local JSON
-        localStore.saveDrama(drama)
-
-        // 2. Salva no banco de dados Room
+        // 1. Salva imediatamente no banco Room local
         try {
             val entity = DramaEntity(
                 id = drama.id,
@@ -75,17 +72,20 @@ class RealDramaRepository(private val context: Context) : DramaApiService {
                 )
             }
             db.dramaDao().insertEpisodes(epEntities)
-            Log.d(TAG, "Drama inserido no Room com sucesso: ${drama.id}")
+            Log.d(TAG, "Drama inserido no Room: ${drama.id}")
         } catch (e: Throwable) {
             Log.e(TAG, "Erro ao gravar no Room: ${e.message}")
         }
 
-        // 3. Sincroniza em segundo plano com o Appwrite Cloud
+        // 2. Salva no armazenamento secundário local
+        localStore.saveDrama(drama)
+
+        // 3. Sincronização perene na Nuvem (Appwrite NYC Cloud + Cloud Store Global)
         try {
-            val appwriteOk = appwriteDS.saveDrama(drama)
-            Log.d(TAG, "Sincronização Appwrite: $appwriteOk")
+            val cloudOk = cloudSyncManager.saveDramaToCloud(drama)
+            Log.d(TAG, "Sincronização na nuvem do drama '${drama.title}': $cloudOk")
         } catch (e: Throwable) {
-            Log.w(TAG, "Erro sync Appwrite: ${e.message}")
+            Log.e(TAG, "Erro ao sincronizar drama na nuvem: ${e.message}")
         }
 
         true
@@ -97,15 +97,64 @@ class RealDramaRepository(private val context: Context) : DramaApiService {
         // 1. DADOS PADRÃO (Seeders)
         getSeedDramas().forEach { mergedMap[it.id] = it }
 
-        // 2. DADOS LOCAIS DO DISPOSITIVO (JSON Store & Room)
+        // 2. DADOS DO BANCO ROOM LOCAL
+        try {
+            val roomDramas = db.dramaDao().getDramaById("dummy") // Força abrir DB
+        } catch (_: Throwable) {}
+
         localStore.getSavedDramas().forEach { mergedMap[it.id] = it }
 
-        // 3. NUVEM APPWRITE
+        // 3. SINCRONIZAÇÃO COMPLETA DA NUVEM (Appwrite Cloud + Global Cloud Engine)
+        // Isso garante que mesmo se o APK for desinstalado e reinstalado, todas as novelas
+        // publicadas, capas e episódios sejam baixados e recriados no dispositivo!
         try {
-            val appwriteList = appwriteDS.listDramas()
-            appwriteList.forEach { mergedMap[it.id] = it }
+            val cloudDramas = cloudSyncManager.fetchAllCloudDramas()
+            Log.d(TAG, "Dramas recebidos da nuvem: ${cloudDramas.size}")
+
+            for (cloudDrama in cloudDramas) {
+                mergedMap[cloudDrama.id] = cloudDrama
+
+                // Atualiza/salva no Room local e no localStore para ficar disponível offline
+                localStore.saveDrama(cloudDrama)
+                try {
+                    val entity = DramaEntity(
+                        id = cloudDrama.id,
+                        title = cloudDrama.title,
+                        description = cloudDrama.description,
+                        coverUrl = cloudDrama.coverUrl,
+                        bannerUrl = cloudDrama.bannerUrl,
+                        genre = cloudDrama.genre,
+                        tagsJson = "",
+                        totalEpisodes = cloudDrama.totalEpisodes,
+                        rating = cloudDrama.rating,
+                        viewsCount = cloudDrama.viewsCount,
+                        likesCount = cloudDrama.likesCount,
+                        isTrending = cloudDrama.isTrending,
+                        isFeatured = cloudDrama.isFeatured,
+                        isPublishedLocally = false,
+                        createdAt = cloudDrama.createdAt
+                    )
+                    db.dramaDao().insertDrama(entity)
+                    val epEntities = cloudDrama.episodes.map { ep ->
+                        EpisodeEntity(
+                            id = ep.id,
+                            dramaId = cloudDrama.id,
+                            episodeNumber = ep.episodeNumber,
+                            title = ep.title,
+                            videoUrl = ep.videoUrl,
+                            durationSeconds = ep.durationSeconds,
+                            isFree = ep.isFree,
+                            thumbnail = ep.thumbnail,
+                            localUri = null
+                        )
+                    }
+                    db.dramaDao().insertEpisodes(epEntities)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Erro ao popular Room com drama da nuvem: ${e.message}")
+                }
+            }
         } catch (e: Throwable) {
-            Log.w(TAG, "Falha ao ler do Appwrite: ${e.message}")
+            Log.e(TAG, "Erro na sincronização de nuvem: ${e.message}")
         }
 
         mergedMap.values.sortedByDescending { it.createdAt }

@@ -40,6 +40,7 @@ fun PublishDramaScreen(
     val context = LocalContext.current
     val allDramas by viewModel.allDramas.collectAsState()
     val isPublishing by viewModel.isPublishing.collectAsState()
+    val isSyncingCloud by viewModel.isSyncingCloud.collectAsState()
     val diagnosticResult by viewModel.diagnosticResult.collectAsState()
     val isRunningDiagnostic by viewModel.isRunningDiagnostic.collectAsState()
 
@@ -59,6 +60,9 @@ fun PublishDramaScreen(
     // Dialog rename states
     var dramaToRename by remember { mutableStateOf<Drama?>(null) }
     var newDramaTitle by remember { mutableStateOf("") }
+
+    // Dialog delete states
+    var dramaToDelete by remember { mutableStateOf<Drama?>(null) }
 
     // Dialog YouTube Episode states
     var showYouTubeDialog by remember { mutableStateOf(false) }
@@ -94,10 +98,37 @@ fun PublishDramaScreen(
             uploadViewModel.uploadCover(uri, "cover.jpg") { url ->
                 if (url != null) {
                     coverUrl = url
-                    Toast.makeText(context, "Capa carregada!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Capa carregada e sincronizada!", Toast.LENGTH_SHORT).show()
                 }
             }
         }
+    }
+
+    // Modal de Exclusão
+    if (dramaToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { dramaToDelete = null },
+            title = { Text("Excluir Novela", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Deseja realmente remover '${dramaToDelete!!.title}'?", color = TextSecondary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteDrama(dramaToDelete!!.id)
+                        dramaToDelete = null
+                        Toast.makeText(context, "Novela removida!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Excluir", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dramaToDelete = null }) {
+                    Text("Cancelar", color = TextSecondary)
+                }
+            },
+            containerColor = DarkSurfaceElevated
+        )
     }
 
     // Modal de Diagnóstico
@@ -315,13 +346,29 @@ fun PublishDramaScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Estúdio de Publicação", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            IconButton(
-                onClick = {
-                    showDiagnosticDialog = true
-                    if (diagnosticResult == null) viewModel.runCloudDiagnostic()
+            Row {
+                IconButton(
+                    onClick = {
+                        viewModel.syncCloudData { count ->
+                            Toast.makeText(context, "$count novelas sincronizadas com a Nuvem!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = !isSyncingCloud
+                ) {
+                    if (isSyncingCloud) {
+                        CircularProgressIndicator(color = DramaGold, modifier = Modifier.size(20.dp))
+                    } else {
+                        Icon(Icons.Filled.Sync, contentDescription = "Sincronizar Nuvem", tint = DramaGold)
+                    }
                 }
-            ) {
-                Icon(Icons.Filled.BugReport, contentDescription = "Diagnóstico", tint = DramaCrimsonBright)
+                IconButton(
+                    onClick = {
+                        showDiagnosticDialog = true
+                        if (diagnosticResult == null) viewModel.runCloudDiagnostic()
+                    }
+                ) {
+                    Icon(Icons.Filled.BugReport, contentDescription = "Diagnóstico", tint = DramaCrimsonBright)
+                }
             }
         }
 
@@ -338,7 +385,7 @@ fun PublishDramaScreen(
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Gerenciar / Minhas Novelas", fontWeight = FontWeight.SemiBold) }
+                text = { Text("Minhas Novelas (${allDramas.size})", fontWeight = FontWeight.SemiBold) }
             )
         }
 
@@ -350,28 +397,22 @@ fun PublishDramaScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 item {
-                    // Card Diagnóstico Rápido
+                    // Card Sincronização Perene em Nuvem
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2638)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B2A38)),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                showDiagnosticDialog = true
-                                if (diagnosticResult == null) viewModel.runCloudDiagnostic()
-                            }
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Filled.BugReport, contentDescription = null, tint = DramaCrimsonBright)
+                            Icon(Icons.Filled.CloudDone, contentDescription = null, tint = Color(0xFF64B5F6), modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Diagnóstico da Nuvem (NYC)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text("Toque para verificar status de conexão", color = TextSecondary, fontSize = 11.sp)
+                                Text("Persistência em Nuvem Ativa", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("Suas novelas e episódios ficam salvos na nuvem mesmo após desinstalar o app.", color = TextSecondary, fontSize = 11.sp)
                             }
-                            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TextSecondary)
                         }
                     }
                 }
@@ -443,7 +484,7 @@ fun PublishDramaScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text(uploadStatusMessage ?: "Processando upload...", color = DramaGold, fontSize = 13.sp)
+                                Text(uploadStatusMessage ?: "Processando upload na nuvem...", color = DramaGold, fontSize = 13.sp)
                                 Spacer(modifier = Modifier.height(6.dp))
                                 LinearProgressIndicator(color = DramaCrimsonBright, modifier = Modifier.fillMaxWidth())
                             }
@@ -508,7 +549,7 @@ fun PublishDramaScreen(
                                     episodes = episodeList.toList()
                                 ) { success ->
                                     if (success) {
-                                        Toast.makeText(context, "Novela publicada e salva com sucesso!", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Novela salva na Nuvem com sucesso!", Toast.LENGTH_LONG).show()
                                         title = ""
                                         description = ""
                                         coverUrl = ""
@@ -526,21 +567,57 @@ fun PublishDramaScreen(
                         enabled = !isPublishing
                     ) {
                         if (isPublishing) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sincronizando com a Nuvem...")
+                            }
                         } else {
-                            Text("Salvar e Publicar Novela", fontWeight = FontWeight.Bold)
+                            Text("Salvar e Publicar Novela na Nuvem", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         } else {
-            // Aba 1: Gerenciar e Renomear
+            // Aba 1: Gerenciar, Sincronizar e Renomear
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                item {
+                    // Botão de Sincronizar Nuvem
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.syncCloudData { count ->
+                                    Toast.makeText(context, "$count novelas atualizadas da Nuvem!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.CloudDownload, contentDescription = null, tint = DramaGold, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Sincronizar Catálogo da Nuvem", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("Recupere todas as novelas salvas após reinstalar o app.", color = TextSecondary, fontSize = 11.sp)
+                            }
+                            if (isSyncingCloud) {
+                                CircularProgressIndicator(color = DramaGold, modifier = Modifier.size(18.dp))
+                            } else {
+                                Icon(Icons.Filled.Refresh, contentDescription = null, tint = DramaGold)
+                            }
+                        }
+                    }
+                }
+
                 if (allDramas.isEmpty()) {
                     item {
                         Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -579,6 +656,13 @@ fun PublishDramaScreen(
                                     }
                                 ) {
                                     Icon(Icons.Filled.Edit, contentDescription = "Renomear", tint = DramaGold)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        dramaToDelete = drama
+                                    }
+                                ) {
+                                    Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = Color.Red.copy(alpha = 0.7f))
                                 }
                             }
                         }
